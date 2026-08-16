@@ -1,0 +1,29 @@
+# Backend
+target/
+!.target/
+*.class
+*.jar
+*.war
+*.log
+.env
+.idea/
+*.iml
+.settings/
+.project
+.classpath
+
+# Frontend
+node_modules/
+.next/
+out/
+.env.local
+.env*.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+*.swp
+*.swo

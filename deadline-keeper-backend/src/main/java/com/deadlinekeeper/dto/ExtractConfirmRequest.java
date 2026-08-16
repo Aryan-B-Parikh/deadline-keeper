@@ -1,0 +1,30 @@
+package com.deadlinekeeper.dto;
+
+import lombok.Getter;
+import lombok.Setter;
+
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.util.List;
+
+@Getter
+@Setter
+public class ExtractConfirmRequest {
+
+    private List<ConfirmedEvent> events;
+    private String sourceType;
+    private String sourceReference;
+    private String sourceFileUrl;
+
+    @Getter
+    @Setter
+    public static class ConfirmedEvent {
+        private String title;
+        private String type;
+        private LocalDate dueDate;
+        private LocalTime dueTime;
+        private String timezone;
+        private List<String> reminderSchedule;
+        private String notes;
+    }
+}

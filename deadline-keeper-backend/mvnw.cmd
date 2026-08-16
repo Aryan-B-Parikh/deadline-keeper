@@ -1,0 +1,93 @@
+@REM ----------------------------------------------------------------------------
+@REM Licensed to the Apache Software Foundation (ASF) under one
+@REM or more contributor license agreements.  See the NOTICE file
+@REM distributed with this work for additional information
+@REM regarding copyright ownership.  The ASF licenses this file
+@REM to you under the Apache License, Version 2.0 (the
+@REM "License"); you may not use this file except in compliance
+@REM with the License.  You may obtain a copy of the License at
+@REM
+@REM    https://www.apache.org/licenses/LICENSE-2.0
+@REM
+@REM Unless required by applicable law or agreed to in writing,
+@REM software distributed under the License is distributed on an
+@REM "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+@REM KIND, either express or implied.  See the License for the
+@REM specific language governing permissions and limitations
+@REM under the License.
+@REM ----------------------------------------------------------------------------
+
+@REM ----------------------------------------------------------------------------
+@REM Apache Maven Wrapper startup batch script, version 3.2.0
+@REM ----------------------------------------------------------------------------
+
+@IF "%__MVNW_ARG0_NAME__%"=="" (SET __MVNW_ARG0_NAME__=%~nx0)
+@SET __MVNW_CMD__=
+@SET __MVNW_ERROR__=
+@SET __MVNW_PSM__=
+@SET PS_MODULE_PATH=
+@SET MVNW_USERNAME=
+@SET MVNW_PASSWORD=
+
+@REM ==== START VALIDATION ====
+@IF NOT "%JAVA_HOME%"=="" goto OkJHome
+@IF NOT "%JDK_HOME%"=="" set JAVA_HOME=%JDK_HOME%
+
+:OkJHome
+@IF NOT "%JAVA_HOME%"=="" goto checkJHome
+@echo ERROR: JAVA_HOME is not set and no 'java' command could be found in your PATH.
+@echo Please set the JAVA_HOME variable in your environment to match the
+@echo location of your Java installation.
+goto fail
+
+:checkJHome
+@IF EXIST "%JAVA_HOME%\bin\java.exe" goto init
+
+@echo ERROR: JAVA_HOME is set to an invalid directory.
+@echo JAVA_HOME = "%JAVA_HOME%"
+@echo Please set the JAVA_HOME variable in your environment to match the
+@echo location of your Java installation.
+goto fail
+
+:init
+
+@REM ==== MVNW_JAVA ====
+@IF NOT "%MVNW_JAVA%"=="" goto runMvnw
+
+@REM Find project base dir
+set MAVEN_PROJECTBASEDIR=%~dp0..
+
+@REM ==== DOWNLOAD MAVEN ====
+set MAVEN_URL=%distributionUrl%
+set MAVEN_HOME=%MAVEN_PROJECTBASEDIR%\.mvn\wrapper\maven
+
+@IF EXIST "%MAVEN_HOME%\bin\mvn.cmd" goto runMvnw
+
+@echo Downloading Maven...
+@echo From: %MAVEN_URL%
+
+@REM Create maven directory
+if not exist "%MAVEN_HOME%" mkdir "%MAVEN_HOME%"
+
+@REM Download using PowerShell
+powershell -Command "& { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri '%MAVEN_URL%' -OutFile '%MAVEN_HOME%\maven.zip' }"
+
+@REM Extract
+powershell -Command "& { Expand-Archive -Path '%MAVEN_HOME%\maven.zip' -DestinationPath '%MAVEN_HOME%' -Force }"
+
+@REM Move contents up
+for /d %%i in ("%MAVEN_HOME%\apache-maven-*") do move "%%i\*" "%MAVEN_HOME%\" >nul 2>&1
+for /d %%i in ("%MAVEN_HOME%\apache-maven-*") do rmdir "%%i"
+
+:runMvnw
+set MVNW_JAVA=%JAVA_HOME%\bin\java.exe
+"%MAVEN_HOME%\bin\mvn.cmd" %*
+
+@REM ==== END ====
+goto eof
+
+:fail
+set ERROR_CODE=1
+
+:eof
+@endlocal & echo off & exit /b %ERROR_CODE%
