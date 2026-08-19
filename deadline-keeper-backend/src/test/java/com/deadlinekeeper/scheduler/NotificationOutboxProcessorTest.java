@@ -36,10 +36,10 @@ class NotificationOutboxProcessorTest {
     private NotificationOutboxProcessor processor;
     private NotificationChannel mockChannel;
 
-    private UUID userId = UUID.randomUUID();
-    private UUID eventId = UUID.randomUUID();
-    private UUID deliveryId = UUID.randomUUID();
-    private UUID outboxId = UUID.randomUUID();
+    private final UUID userId = UUID.randomUUID();
+    private final UUID eventId = UUID.randomUUID();
+    private final UUID deliveryId = UUID.randomUUID();
+    private final UUID outboxId = UUID.randomUUID();
     private User user;
     private ReminderDelivery delivery;
     private NotificationOutbox outbox;
@@ -85,7 +85,7 @@ class NotificationOutboxProcessorTest {
 
         processor.processPending();
 
-        verify(mockChannel).send(eq(user), any(), any(), eq("reminder:" + deliveryId));
+        verify(mockChannel).send(eq(user), any(), any(), eq("reminder:" + deliveryId), eq(eventId));
         verify(writer).markSent(outbox);
         verify(writer, never()).handleProviderFailure(any(), any());
     }
@@ -99,7 +99,7 @@ class NotificationOutboxProcessorTest {
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
 
         doThrow(new RuntimeException("SendGrid timeout"))
-                .when(mockChannel).send(any(), any(), any(), any());
+                .when(mockChannel).send(any(), any(), any(), any(), any());
 
         processor.processPending();
 
@@ -115,19 +115,20 @@ class NotificationOutboxProcessorTest {
 
         processor.sendViaProvider(outbox);
 
-        verify(mockChannel, never()).send(any(), any(), any(), any());
+        verify(mockChannel, never()).send(any(), any(), any(), any(), any());
         verify(writer).failPermanently(eq(outbox), eq("Delivery already sent"));
     }
 
     @Test
-    @DisplayName("Missing deliveryId -> failPermanently called")
-    void missingDeliveryId() {
+    @DisplayName("Direct notification without deliveryId is supported")
+    void directNotificationWithoutDeliveryId() {
         outbox.setDeliveryId(null);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
 
         processor.sendViaProvider(outbox);
 
-        verify(mockChannel, never()).send(any(), any(), any(), any());
-        verify(writer).failPermanently(eq(outbox), eq("No deliveryId"));
+        verify(mockChannel).send(eq(user), any(), any(), eq("reminder:" + deliveryId), eq(eventId));
+        verify(writer).markSent(outbox);
     }
 
     @Test
@@ -172,7 +173,7 @@ class NotificationOutboxProcessorTest {
 
         processor.processPending();
 
-        verify(mockChannel, never()).send(any(), any(), any(), any());
+        verify(mockChannel, never()).send(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -203,7 +204,7 @@ class NotificationOutboxProcessorTest {
 
         processor.processPending();
 
-        verify(mockChannel, times(3)).send(eq(user), any(), any(), any());
+        verify(mockChannel, times(3)).send(eq(user), any(), any(), any(), eq(eventId));
         verify(writer, times(3)).markSent(any());
     }
 
@@ -219,8 +220,8 @@ class NotificationOutboxProcessorTest {
     }
 
     @Test
-    @DisplayName("Provider receives idempotency key")
-    void providerGetsIdempotencyKey() {
+    @DisplayName("Provider receives idempotency key and event identity")
+    void providerGetsIdentity() {
         when(outboxRepository.claimPendingJobIds(50, 120L)).thenReturn(List.of(outboxId));
         when(outboxRepository.findAllById(List.of(outboxId))).thenReturn(List.of(outbox));
         when(deliveryRepository.findById(deliveryId)).thenReturn(Optional.of(delivery));
@@ -228,7 +229,7 @@ class NotificationOutboxProcessorTest {
 
         processor.processPending();
 
-        verify(mockChannel).send(any(), any(), any(), eq("reminder:" + deliveryId));
+        verify(mockChannel).send(any(), any(), any(), eq("reminder:" + deliveryId), eq(eventId));
     }
 
     @Test
