@@ -12,6 +12,7 @@ import com.sendgrid.helpers.mail.objects.Email;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
+import java.util.UUID;
 
 @Component
 public class EmailNotificationChannel implements NotificationChannel {
@@ -24,13 +25,13 @@ public class EmailNotificationChannel implements NotificationChannel {
     }
 
     @Override
-    public void send(User user, String title, String message, String idempotencyKey) {
+    public void send(User user, String title, String message, String idempotencyKey, UUID eventId) {
         try {
             Mail mail = new Mail(new Email(config.getFromEmail(), "DeadlineKeeper"), title,
                     new Email(user.getEmail()), new Content("text/html", buildHtmlContent(title, message)));
             if (idempotencyKey != null && !idempotencyKey.isBlank()) {
                 mail.addCustomArg("idempotency_key", idempotencyKey);
-                mail.addCustomArg("delivery_id", idempotencyKey.replace("reminder:", ""));
+                if (eventId != null) mail.addCustomArg("event_id", eventId.toString());
             }
 
             Request request = new Request();
