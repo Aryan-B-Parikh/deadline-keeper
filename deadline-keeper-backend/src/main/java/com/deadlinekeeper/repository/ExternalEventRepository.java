@@ -11,9 +11,9 @@ import java.util.UUID;
 @Repository
 public interface ExternalEventRepository extends JpaRepository<ExternalEvent, UUID> {
 
-    Optional<ExternalEvent> findByProviderAndExternalId(String provider, String externalId);
+    Optional<ExternalEvent> findByUserIdAndProviderAndExternalId(UUID userId, String provider, String externalId);
 
     List<ExternalEvent> findByDeadlineId(UUID deadlineId);
 
-    void deleteByProviderAndExternalId(String provider, String externalId);
+    void deleteByUserIdAndProviderAndExternalId(UUID userId, String provider, String externalId);
 }
