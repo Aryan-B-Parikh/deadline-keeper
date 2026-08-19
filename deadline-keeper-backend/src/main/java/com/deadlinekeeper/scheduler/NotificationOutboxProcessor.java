@@ -37,7 +37,9 @@ public class NotificationOutboxProcessor {
                                        OutboxRetryPolicy retryPolicy,
                                        @org.springframework.beans.factory.annotation.Value("${outbox.lease-seconds:120}") long leaseSeconds,
                                        @org.springframework.beans.factory.annotation.Value("${outbox.claim-limit:50}") int claimLimit) {
-        if (leaseSeconds <= 0 || claimLimit <= 0) throw new IllegalArgumentException("Outbox lease and claim limit must be positive");
+        if (leaseSeconds <= 0 || claimLimit <= 0) {
+            throw new IllegalArgumentException("Outbox lease and claim limit must be positive");
+        }
         this.outboxRepository = outboxRepository;
         this.writer = writer;
         this.deliveryRepository = deliveryRepository;
@@ -70,22 +72,33 @@ public class NotificationOutboxProcessor {
     }
 
     protected void sendViaProvider(NotificationOutbox entry) {
-        if (entry.getDeliveryId() == null) { writer.failPermanently(entry, "No deliveryId"); return; }
-
-        ReminderDelivery delivery = deliveryRepository.findById(entry.getDeliveryId()).orElse(null);
-        if (delivery == null) { writer.failPermanently(entry, "Delivery not found"); return; }
-        if ("sent".equals(delivery.getStatus()) || "failed".equals(delivery.getStatus())) {
-            writer.failPermanently(entry, "Delivery already " + delivery.getStatus());
-            return;
+        ReminderDelivery delivery = null;
+        if (entry.getDeliveryId() != null) {
+            delivery = deliveryRepository.findById(entry.getDeliveryId()).orElse(null);
+            if (delivery == null) {
+                writer.failPermanently(entry, "Delivery not found");
+                return;
+            }
+            if ("sent".equals(delivery.getStatus()) || "failed".equals(delivery.getStatus())) {
+                writer.failPermanently(entry, "Delivery already " + delivery.getStatus());
+                return;
+            }
         }
 
         User user = userRepository.findById(entry.getUserId()).orElse(null);
-        if (user == null) { writer.failPermanently(entry, "User not found"); return; }
+        if (user == null) {
+            writer.failPermanently(entry, "User not found");
+            return;
+        }
 
         NotificationChannel channel = channels.stream()
                 .filter(c -> c.getChannelName().equals(entry.getChannel()))
-                .findFirst().orElse(null);
-        if (channel == null) { writer.failPermanently(entry, "Unknown channel: " + entry.getChannel()); return; }
+                .findFirst()
+                .orElse(null);
+        if (channel == null) {
+            writer.failPermanently(entry, "Unknown channel: " + entry.getChannel());
+            return;
+        }
 
         channel.send(user, entry.getTitle(), entry.getMessage(), entry.getIdempotencyKey());
         writer.markSent(entry);
