@@ -1,14 +1,10 @@
 package com.deadlinekeeper.mapper;
 
-
 import com.deadlinekeeper.dto.EventResponse;
-import com.deadlinekeeper.model.Event;
-import org.springframework.stereotype.Component;
 import com.deadlinekeeper.dto.ReminderResponse;
+import com.deadlinekeeper.model.Event;
 import com.deadlinekeeper.repository.ReminderRepository;
-
-import java.util.List;
-import java.util.stream.Collectors;
+import org.springframework.stereotype.Component;
 
 @Component
 public class EventMapper {
@@ -20,10 +16,10 @@ public class EventMapper {
     }
 
     public EventResponse toResponse(Event event) {
-        List<ReminderResponse> reminders = reminderRepository.findByEventId(event.getId())
+        var reminders = reminderRepository.findByEventId(event.getId())
                 .stream()
                 .map(r -> new ReminderResponse(r.getId(), r.getOffsetSeconds(), r.getChannel(), r.getEnabled()))
-                .collect(Collectors.toList());
+                .toList();
 
         return EventResponse.builder()
                 .id(event.getId())
