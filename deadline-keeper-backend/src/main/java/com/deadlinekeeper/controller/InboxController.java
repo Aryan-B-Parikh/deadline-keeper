@@ -8,10 +8,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
-import java.nio.charset.StandardCharsets;
-import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 
@@ -29,20 +25,22 @@ public class InboxController {
         this.sendGridConfig = sendGridConfig;
     }
 
-    @PostMapping("/webhook")
+    @PostMapping("/webhook/{token}")
     public ResponseEntity<Map<String, String>> handleInboundEmail(
-            @RequestHeader(value = "X-Twilio-Email-Event-Webhook-Signature", required = false) String signature,
-            @RequestHeader(value = "X-Twilio-Email-Event-Webhook-Timestamp", required = false) String timestamp,
+            @PathVariable String token,
             @RequestParam("from") String from,
             @RequestParam("subject") String subject,
             @RequestParam(value = "text", required = false) String textBody,
             @RequestParam(value = "html", required = false) String htmlBody) {
 
-        if (sendGridConfig.getWebhookSecret() != null && !sendGridConfig.getWebhookSecret().isBlank()) {
-            if (!validateWebhookSignature(signature, timestamp, from + subject + textBody)) {
-                log.warn("Invalid webhook signature from {}", from);
-                return ResponseEntity.status(401).body(Map.of("error", "Invalid signature"));
+        String configuredToken = sendGridConfig.getWebhookToken();
+        if (configuredToken != null && !configuredToken.isBlank()) {
+            if (!configuredToken.equals(token)) {
+                log.warn("Invalid webhook token received");
+                return ResponseEntity.status(401).body(Map.of("error", "Invalid token"));
             }
+        } else {
+            log.warn("WARNING: Webhook token validation disabled. Set sendgrid.webhook-token for production.");
         }
 
         log.info("Received inbound email from: {} subject: {}", from, subject);
@@ -54,21 +52,6 @@ public class InboxController {
         return ResponseEntity.ok(Map.of(
                 "status", "processed",
                 "events_created", String.valueOf(events.size())));
-    }
-
-    private boolean validateWebhookSignature(String signature, String timestamp, String body) {
-        if (signature == null || timestamp == null) return false;
-        try {
-            String payload = timestamp + body;
-            Mac mac = Mac.getInstance("HmacSHA256");
-            mac.init(new SecretKeySpec(sendGridConfig.getWebhookSecret().getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
-            byte[] hash = mac.doFinal(payload.getBytes(StandardCharsets.UTF_8));
-            String computed = Base64.getEncoder().encodeToString(hash);
-            return computed.equals(signature);
-        } catch (Exception e) {
-            log.error("Webhook signature validation failed", e);
-            return false;
-        }
     }
 
     private String extractEmail(String fromField) {

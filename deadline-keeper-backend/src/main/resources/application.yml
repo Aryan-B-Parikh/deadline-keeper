@@ -52,6 +52,7 @@ sendgrid:
   from-email: ${SENDGRID_FROM_EMAIL:}
   inbox-parse-domain: ${SENDGRID_INBOX_PARSE_DOMAIN:}
   webhook-secret: ${SENDGRID_WEBHOOK_SECRET:}
+  webhook-token: ${SENDGRID_WEBHOOK_TOKEN:}
 
 # Google Calendar
 google:
@@ -67,3 +68,4 @@ cors:
 # App
 app:
   base-url: ${APP_BASE_URL:http://localhost:8080}
+  encryption-key: ${APP_ENCRYPTION_KEY:}

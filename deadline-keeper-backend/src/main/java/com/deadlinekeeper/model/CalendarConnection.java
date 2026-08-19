@@ -43,6 +43,12 @@ public class CalendarConnection {
     @Column(name = "created_at", updatable = false)
     private Instant createdAt;
 
+    @Column(name = "oauth_state")
+    private String oauthState;
+
+    @Column(name = "oauth_state_expires_at")
+    private Instant oauthStateExpiresAt;
+
     @Column(name = "updated_at")
     private Instant updatedAt;
 

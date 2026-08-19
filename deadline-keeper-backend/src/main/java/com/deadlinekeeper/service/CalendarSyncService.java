@@ -9,6 +9,7 @@ import com.deadlinekeeper.model.ExternalEvent;
 import com.deadlinekeeper.repository.CalendarConnectionRepository;
 import com.deadlinekeeper.repository.EventRepository;
 import com.deadlinekeeper.repository.ExternalEventRepository;
+import com.deadlinekeeper.security.TokenEncryption;
 import com.google.api.client.auth.oauth2.Credential;
 import com.google.api.client.googleapis.auth.oauth2.GoogleAuthorizationCodeFlow;
 import com.google.api.client.googleapis.auth.oauth2.GoogleTokenResponse;
@@ -54,17 +55,20 @@ public class CalendarSyncService {
     private final ExternalEventRepository externalEventRepository;
     private final EventRepository eventRepository;
     private final DeadlineStatusService statusService;
+    private final TokenEncryption tokenEncryption;
 
     public CalendarSyncService(GoogleCalendarConfig config,
                                CalendarConnectionRepository connectionRepository,
                                ExternalEventRepository externalEventRepository,
                                EventRepository eventRepository,
-                               DeadlineStatusService statusService) {
+                               DeadlineStatusService statusService,
+                               TokenEncryption tokenEncryption) {
         this.config = config;
         this.connectionRepository = connectionRepository;
         this.externalEventRepository = externalEventRepository;
         this.eventRepository = eventRepository;
         this.statusService = statusService;
+        this.tokenEncryption = tokenEncryption;
     }
 
     public String getAuthorizationUrl(String state) {
@@ -103,8 +107,8 @@ public class CalendarSyncService {
                     .orElse(new CalendarConnection());
             conn.setUserId(userId);
             conn.setProvider("google");
-            conn.setEncryptedAccessToken(tokenResponse.getAccessToken());
-            conn.setEncryptedRefreshToken(tokenResponse.getRefreshToken());
+            conn.setEncryptedAccessToken(tokenEncryption.encrypt(tokenResponse.getAccessToken()));
+            conn.setEncryptedRefreshToken(tokenEncryption.encrypt(tokenResponse.getRefreshToken()));
             connectionRepository.save(conn);
 
             syncEvents(userId);
@@ -136,7 +140,6 @@ public class CalendarSyncService {
         } catch (Exception e) {
             String msg = e.getMessage() != null ? e.getMessage() : "";
             if (msg.contains("410") || msg.contains("GONE")) {
-                // Sync token expired — clear and do a full resync
                 log.warn("Sync token expired for user {}, performing full resync", userId);
                 conn.setSyncToken(null);
                 connectionRepository.save(conn);
@@ -174,7 +177,6 @@ public class CalendarSyncService {
             pageToken = events.getNextPageToken();
         } while (pageToken != null);
 
-        // Get sync token for future incremental synces
         var syncRequest = calendarService.events().list("primary")
                 .setMaxResults(1)
                 .setSyncToken("1");
@@ -224,7 +226,6 @@ public class CalendarSyncService {
     private void importGoogleEvent(UUID userId, com.google.api.services.calendar.model.Event googleEvent) {
         if (googleEvent.getStart() == null || googleEvent.getSummary() == null) return;
 
-        // Classify: only import if it looks like a deadline
         if (!isDeadlineWorthy(googleEvent)) {
             log.debug("Skipping non-deadline calendar event: {}", googleEvent.getSummary());
             return;
@@ -238,7 +239,6 @@ public class CalendarSyncService {
             Event event = eventRepository.findById(ext.getDeadlineId()).orElse(null);
             if (event == null) return;
 
-            // Check if Google event was updated
             String newEtag = googleEvent.getEtag();
             if (newEtag != null && !newEtag.equals(ext.getEtag())) {
                 updateEventFromGoogle(event, googleEvent);
@@ -249,7 +249,6 @@ public class CalendarSyncService {
             return;
         }
 
-        // Parse date/time
         Instant dueAt = parseGoogleEventDateTime(googleEvent);
         if (dueAt == null) return;
 
@@ -258,7 +257,6 @@ public class CalendarSyncService {
         String tz = googleEvent.getStart().getTimeZone() != null
                 ? googleEvent.getStart().getTimeZone() : "UTC";
 
-        // Classify type
         String type = classifyEventType(googleEvent.getSummary());
 
         Event event = new Event();
@@ -280,7 +278,6 @@ public class CalendarSyncService {
         event.setNotes(googleEvent.getDescription());
         Event saved = eventRepository.save(event);
 
-        // Track external event
         ExternalEvent extEvent = new ExternalEvent();
         extEvent.setDeadlineId(saved.getId());
         extEvent.setProvider("google");
@@ -316,7 +313,6 @@ public class CalendarSyncService {
             if (start.getDateTime() != null) {
                 return Instant.parse(start.getDateTime().toStringRfc3339());
             } else if (start.getDate() != null) {
-                // All-day event: use end of day in the event's timezone
                 LocalDate date = LocalDate.parse(start.getDate().toStringRfc3339().substring(0, 10));
                 String tz = start.getTimeZone() != null ? start.getTimeZone() : "UTC";
                 return date.atTime(LocalTime.MAX).atZone(ZoneId.of(tz)).toInstant();
@@ -357,6 +353,9 @@ public class CalendarSyncService {
     }
 
     private Calendar buildCalendarService(CalendarConnection conn) throws Exception {
+        String accessToken = tokenEncryption.decrypt(conn.getEncryptedAccessToken());
+        String refreshToken = tokenEncryption.decrypt(conn.getEncryptedRefreshToken());
+
         HttpTransport httpTransport = GoogleNetHttpTransport.newTrustedTransport();
         GoogleAuthorizationCodeFlow flow = new GoogleAuthorizationCodeFlow.Builder(
                 httpTransport, JSON_FACTORY,
@@ -366,8 +365,8 @@ public class CalendarSyncService {
 
         Credential credential = flow.createAndStoreCredential(
                 new GoogleTokenResponse()
-                        .setAccessToken(conn.getEncryptedAccessToken())
-                        .setRefreshToken(conn.getEncryptedRefreshToken()),
+                        .setAccessToken(accessToken)
+                        .setRefreshToken(refreshToken),
                 conn.getUserId().toString());
 
         return new Calendar.Builder(httpTransport, JSON_FACTORY, credential)

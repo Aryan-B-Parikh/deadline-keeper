@@ -114,8 +114,21 @@ public class SupabaseJwtAuthenticationFilter extends OncePerRequestFilter {
     private void validateClaims(Claims claims) {
         String issuer = claims.getIssuer();
         String expectedIssuer = supabaseConfig.getUrl() + "/auth/v1";
-        if (issuer != null && !issuer.equals(expectedIssuer)) {
+
+        if (issuer == null || issuer.isBlank()) {
+            throw new SecurityException("JWT missing required issuer claim");
+        }
+        if (!issuer.equals(expectedIssuer)) {
             throw new SecurityException("Invalid JWT issuer: " + issuer);
+        }
+
+        Set<String> audience = claims.getAudience();
+        String expectedAudience = supabaseConfig.getUrl()
+                .replace("https://", "")
+                .replace("http://", "")
+                .split("\\.")[0];
+        if (audience != null && !audience.isEmpty() && !audience.contains(expectedAudience)) {
+            log.warn("JWT audience mismatch: expected={}, got={}", expectedAudience, audience);
         }
 
         if (claims.getExpiration() != null && claims.getExpiration().before(new Date())) {

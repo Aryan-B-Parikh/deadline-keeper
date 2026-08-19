@@ -11,4 +11,6 @@ import java.util.UUID;
 public interface CalendarConnectionRepository extends JpaRepository<CalendarConnection, UUID> {
 
     Optional<CalendarConnection> findByUserId(UUID userId);
+
+    Optional<CalendarConnection> findByOauthState(String oauthState);
 }
