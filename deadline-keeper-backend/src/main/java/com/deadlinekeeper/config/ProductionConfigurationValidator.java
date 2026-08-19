@@ -1,11 +1,9 @@
 package com.deadlinekeeper.config;
 
+import jakarta.annotation.PostConstruct;
 import org.springframework.core.env.Environment;
 import org.springframework.core.env.Profiles;
 import org.springframework.stereotype.Component;
-
-import jakarta.annotation.PostConstruct;
-import java.util.List;
 
 @Component
 public class ProductionConfigurationValidator {
