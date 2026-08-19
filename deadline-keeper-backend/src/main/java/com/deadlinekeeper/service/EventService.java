@@ -3,6 +3,7 @@ package com.deadlinekeeper.service;
 import com.deadlinekeeper.dto.EventRequest;
 import com.deadlinekeeper.dto.EventResponse;
 import com.deadlinekeeper.exception.ResourceNotFoundException;
+import com.deadlinekeeper.exception.ValidationException;
 import com.deadlinekeeper.mapper.EventMapper;
 import com.deadlinekeeper.model.Event;
 import com.deadlinekeeper.repository.EventRepository;
@@ -33,13 +34,10 @@ public class EventService {
     }
 
     public List<EventResponse> getUserEvents(UUID userId, String status) {
-        List<Event> events;
-        if (status != null && !status.isEmpty()) {
-            events = eventRepository.findByUserIdAndStatus(userId, status);
-        } else {
-            events = eventRepository.findByUserId(userId);
-        }
-        return events.stream().map(eventMapper::toResponse).toList();
+        List<Event> events = status != null && !status.isEmpty()
+                ? eventRepository.findByUserIdAndStatus(userId, status)
+                : eventRepository.findByUserId(userId);
+        return eventMapper.toResponses(events);
     }
 
     public EventResponse getEvent(UUID userId, UUID eventId) {
@@ -53,25 +51,15 @@ public class EventService {
         event.setUserId(userId);
         event.setTitle(request.getTitle());
         event.setType(request.getType());
-
-        String timezone = request.getTimezone() != null ? request.getTimezone() : "UTC";
-        try {
-            ZoneId.of(timezone);
-        } catch (Exception e) {
-            throw new com.deadlinekeeper.exception.ValidationException("Invalid timezone: " + timezone);
-        }
-        event.setTimezone(timezone);
+        event.setTimezone(validateTimezone(request.getTimezone()));
         event.setDueAt(request.getDueAt());
-
         event.setSource("manual");
-        event.setAiConfidence(null); // Explicitly null for manual
+        event.setAiConfidence(null);
         event.setStatus(deadlineStatusService.computeStatus(event.getDueAt()));
         event.setNotes(request.getNotes());
 
         Event saved = eventRepository.save(event);
-        if (request.getReminders() != null) {
-            reminderService.syncFromSchedule(saved, request.getReminders());
-        }
+        if (request.getReminders() != null) reminderService.syncFromSchedule(saved, request.getReminders());
         return eventMapper.toResponse(saved);
     }
 
@@ -81,25 +69,16 @@ public class EventService {
 
         event.setTitle(request.getTitle());
         event.setType(request.getType());
-        String timezone = request.getTimezone() != null ? request.getTimezone() : "UTC";
-        try {
-            ZoneId.of(timezone);
-        } catch (Exception e) {
-            throw new com.deadlinekeeper.exception.ValidationException("Invalid timezone: " + timezone);
-        }
-        event.setTimezone(timezone);
+        event.setTimezone(validateTimezone(request.getTimezone()));
         event.setNotes(request.getNotes());
-
         event.setDueAt(request.getDueAt());
 
-        if (!event.getStatus().equals("done")) {
+        if (!"done".equals(event.getStatus())) {
             event.setStatus(deadlineStatusService.computeStatus(event.getDueAt(), event.getStatus()));
         }
 
         Event saved = eventRepository.save(event);
-        if (request.getReminders() != null) {
-            reminderService.syncFromSchedule(saved, request.getReminders());
-        }
+        if (request.getReminders() != null) reminderService.syncFromSchedule(saved, request.getReminders());
         return eventMapper.toResponse(saved);
     }
 
@@ -125,18 +104,28 @@ public class EventService {
         event.setDueAt(newDueAt);
         event.setStatus(deadlineStatusService.computeStatus(newDueAt, event.getStatus()));
 
-        Event saved = eventRepository.save(event);
-        return eventMapper.toResponse(saved);
+        return eventMapper.toResponse(eventRepository.save(event));
+    }
+
+    private String validateTimezone(String timezone) {
+        String value = timezone == null || timezone.isBlank() ? "UTC" : timezone;
+        try {
+            ZoneId.of(value);
+            return value;
+        } catch (Exception e) {
+            throw new ValidationException("Invalid timezone: " + value);
+        }
     }
 
     private Duration parseDuration(String duration) {
-        if (duration.endsWith("d")) {
-            return Duration.ofDays(Long.parseLong(duration.replace("d", "")));
-        } else if (duration.endsWith("h")) {
-            return Duration.ofHours(Long.parseLong(duration.replace("h", "")));
-        } else if (duration.endsWith("m")) {
-            return Duration.ofMinutes(Long.parseLong(duration.replace("m", "")));
+        if (duration == null || duration.isBlank()) return Duration.ofDays(1);
+        try {
+            if (duration.endsWith("d")) return Duration.ofDays(Long.parseLong(duration.substring(0, duration.length() - 1)));
+            if (duration.endsWith("h")) return Duration.ofHours(Long.parseLong(duration.substring(0, duration.length() - 1)));
+            if (duration.endsWith("m")) return Duration.ofMinutes(Long.parseLong(duration.substring(0, duration.length() - 1)));
+        } catch (NumberFormatException e) {
+            throw new ValidationException("Invalid snooze duration: " + duration);
         }
-        return Duration.ofDays(1);
+        throw new ValidationException("Invalid snooze duration: " + duration);
     }
 }
