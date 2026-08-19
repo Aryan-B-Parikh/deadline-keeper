@@ -16,15 +16,18 @@ export default function DashboardPage() {
 
   const fetchEvents = useCallback(async () => {
     if (!user) return;
+    setLoading(true);
     try {
-      const data = await eventApi.list(filter !== 'all' ? filter : undefined);
+      // Fetch the complete user-owned set once so summary counts remain accurate
+      // when a status filter is selected.
+      const data = await eventApi.list();
       setEvents(data);
     } catch (err) {
       console.error('Failed to fetch events:', err);
     } finally {
       setLoading(false);
     }
-  }, [user, filter]);
+  }, [user]);
 
   useEffect(() => {
     if (!authLoading && user) fetchEvents();
@@ -33,7 +36,7 @@ export default function DashboardPage() {
   const handleMarkDone = async (id: string) => {
     try {
       await eventApi.markDone(id);
-      fetchEvents();
+      await fetchEvents();
     } catch (err) {
       console.error('Failed to mark done:', err);
     }
@@ -42,7 +45,7 @@ export default function DashboardPage() {
   const handleSnooze = async (id: string) => {
     try {
       await eventApi.snooze(id, '1d');
-      fetchEvents();
+      await fetchEvents();
     } catch (err) {
       console.error('Failed to snooze:', err);
     }
@@ -52,7 +55,7 @@ export default function DashboardPage() {
     if (!confirm('Delete this event?')) return;
     try {
       await eventApi.delete(id);
-      fetchEvents();
+      await fetchEvents();
     } catch (err) {
       console.error('Failed to delete:', err);
     }
@@ -69,22 +72,25 @@ export default function DashboardPage() {
     done: events.filter((e) => e.status === 'done').length,
   };
 
+  const visibleEvents = filter === 'all'
+    ? events
+    : events.filter((event) => event.status === filter);
+
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
           <p className="text-gray-500 text-sm mt-1">Your deadlines at a glance</p>
         </div>
         <Link
           href="/dashboard/events/new"
-          className="bg-brand-600 text-white px-4 py-2 rounded-lg hover:bg-brand-700 transition-colors text-sm font-medium"
+          className="inline-flex justify-center bg-brand-600 text-white px-4 py-2 rounded-lg hover:bg-brand-700 transition-colors text-sm font-medium"
         >
           + Add Event
         </Link>
       </div>
 
-      {/* Status summary cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
         {[
           { key: 'upcoming', label: 'Upcoming', color: 'bg-blue-50 text-blue-700 border-blue-200', icon: '📅' },
@@ -94,29 +100,30 @@ export default function DashboardPage() {
         ].map(({ key, label, color, icon }) => (
           <button
             key={key}
-            onClick={() => setFilter(filter === key ? 'all' : (key as StatusFilter))}
+            type="button"
+            onClick={() => setFilter(filter === key ? 'all' : key as StatusFilter)}
+            aria-pressed={filter === key}
             className={`${color} border rounded-lg p-4 text-left transition-all ${
               filter === key ? 'ring-2 ring-offset-1 ring-brand-400' : ''
             }`}
           >
             <div className="flex items-center gap-2">
-              <span>{icon}</span>
+              <span aria-hidden="true">{icon}</span>
               <span className="text-sm font-medium">{label}</span>
             </div>
-            <div className="text-2xl font-bold mt-1">
-              {counts[key as keyof typeof counts] ?? 0}
-            </div>
+            <div className="text-2xl font-bold mt-1">{counts[key as keyof typeof counts]}</div>
           </button>
         ))}
       </div>
 
-      {/* Filter pills */}
-      <div className="flex gap-2 mb-4">
+      <div className="flex gap-2 mb-4 overflow-x-auto pb-1" role="group" aria-label="Event filters">
         {(['all', 'upcoming', 'due_soon', 'overdue', 'done'] as StatusFilter[]).map((s) => (
           <button
             key={s}
+            type="button"
             onClick={() => setFilter(s)}
-            className={`text-xs px-3 py-1 rounded-full transition-colors ${
+            aria-pressed={filter === s}
+            className={`text-xs px-3 py-1 rounded-full whitespace-nowrap transition-colors ${
               filter === s
                 ? 'bg-brand-600 text-white'
                 : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -127,12 +134,11 @@ export default function DashboardPage() {
         ))}
       </div>
 
-      {/* Event list */}
       {loading ? (
         <div className="text-center text-gray-400 py-12">Loading events...</div>
-      ) : events.length === 0 ? (
+      ) : visibleEvents.length === 0 ? (
         <div className="text-center py-12">
-          <div className="text-4xl mb-3">📭</div>
+          <div className="text-4xl mb-3" aria-hidden="true">📭</div>
           <p className="text-gray-500">
             {filter === 'all' ? 'No events yet. Add your first deadline!' : `No ${filter.replace('_', ' ')} events`}
           </p>
@@ -147,7 +153,7 @@ export default function DashboardPage() {
         </div>
       ) : (
         <div className="grid gap-3">
-          {events.map((event) => (
+          {visibleEvents.map((event) => (
             <EventCard
               key={event.id}
               event={event}
