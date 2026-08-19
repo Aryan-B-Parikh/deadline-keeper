@@ -6,22 +6,17 @@ import com.deadlinekeeper.model.ReminderDelivery;
 import com.deadlinekeeper.model.User;
 import com.deadlinekeeper.repository.ReminderDeliveryRepository;
 import com.deadlinekeeper.repository.UserRepository;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
-import java.util.UUID;
 
 @Service
 public class ReminderDeliveryService {
-
-    private static final Logger log = LoggerFactory.getLogger(ReminderDeliveryService.class);
 
     private final ReminderDeliveryRepository deliveryRepository;
     private final NotificationOutboxService outboxService;
@@ -35,11 +30,14 @@ public class ReminderDeliveryService {
         this.userRepository = userRepository;
     }
 
-    @Transactional
+    /**
+     * Creates one delivery in an independent transaction. The unique database constraint
+     * handles concurrent schedulers; a duplicate simply rolls back this small transaction.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void createDeliveryIfAbsent(Event event, Reminder reminder, Instant fireTime) {
-        boolean exists = deliveryRepository.existsByEventIdAndReminderIdAndChannel(
-                event.getId(), reminder.getId(), reminder.getChannel());
-        if (exists) return;
+        if (deliveryRepository.existsByEventIdAndReminderIdAndChannel(
+                event.getId(), reminder.getId(), reminder.getChannel())) return;
 
         ReminderDelivery delivery = new ReminderDelivery();
         delivery.setEventId(event.getId());
@@ -49,13 +47,7 @@ public class ReminderDeliveryService {
         delivery.setStatus("pending");
         delivery.setAttemptCount(0);
 
-        try {
-            deliveryRepository.save(delivery);
-        } catch (DataIntegrityViolationException e) {
-            log.debug("Race condition: another instance already created delivery for event {} reminder {}",
-                    event.getId(), reminder.getId());
-            return;
-        }
+        deliveryRepository.saveAndFlush(delivery);
 
         User user = userRepository.findById(event.getUserId()).orElse(null);
         if (user == null) return;
@@ -67,7 +59,6 @@ public class ReminderDeliveryService {
                 event.getDueAt().atZone(ZoneId.of(event.getTimezone()))
                         .format(DateTimeFormatter.ofPattern("MMM d, yyyy HH:mm")));
 
-        // Enqueue to outbox — delivery status stays PENDING until outbox processor confirms
         outboxService.enqueue(delivery.getId(), user.getId(), event.getId(), title, message, reminder.getChannel(), fireTime);
     }
 
