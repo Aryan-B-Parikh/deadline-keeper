@@ -107,7 +107,7 @@ public class InboxParseService {
         for (NotificationChannel channel : notificationChannels) {
             if ("email".equals(channel.getChannelName())) {
                 try {
-                    channel.send(user, title, message.toString());
+                    channel.send(user, title, message.toString(), null);
                 } catch (Exception e) {
                     log.error("Failed to send confirmation email: {}", e.getMessage());
                 }

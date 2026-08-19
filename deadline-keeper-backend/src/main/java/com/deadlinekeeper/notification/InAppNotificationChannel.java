@@ -7,7 +7,7 @@ import org.springframework.stereotype.Component;
 public class InAppNotificationChannel implements NotificationChannel {
 
     @Override
-    public void send(User user, String title, String message) {
+    public void send(User user, String title, String message, String idempotencyKey) {
         // In-app notifications are persisted in NotificationService.send()
         // This channel is a no-op since the DB write happens in the service layer
     }

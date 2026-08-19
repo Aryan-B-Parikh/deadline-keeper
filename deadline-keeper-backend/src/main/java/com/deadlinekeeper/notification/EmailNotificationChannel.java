@@ -9,12 +9,17 @@ import com.sendgrid.SendGrid;
 import com.sendgrid.helpers.mail.Mail;
 import com.sendgrid.helpers.mail.objects.Content;
 import com.sendgrid.helpers.mail.objects.Email;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
+import java.util.Map;
 
 @Component
 public class EmailNotificationChannel implements NotificationChannel {
+
+    private static final Logger log = LoggerFactory.getLogger(EmailNotificationChannel.class);
 
     private final SendGrid sendGrid;
     private final SendGridConfig config;
@@ -25,12 +30,19 @@ public class EmailNotificationChannel implements NotificationChannel {
     }
 
     @Override
-    public void send(User user, String title, String message) {
+    public void send(User user, String title, String message, String idempotencyKey) {
         try {
             Email from = new Email(config.getFromEmail(), "DeadlineKeeper");
             Email to = new Email(user.getEmail());
             Content content = new Content("text/html", buildHtmlContent(title, message));
             Mail mail = new Mail(from, title, to, content);
+
+            // Provider-side idempotency: SendGrid custom_args lets the provider
+            // deduplicate within a time window. If key is provided, duplicate sends
+            // with the same key produce only one email.
+            if (idempotencyKey != null) {
+                mail.addCustomArg("idempotency_key", idempotencyKey);
+            }
 
             Request request = new Request();
             request.setMethod(Method.POST);

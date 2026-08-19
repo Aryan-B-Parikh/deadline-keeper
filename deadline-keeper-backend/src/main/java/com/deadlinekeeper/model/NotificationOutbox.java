@@ -40,7 +40,7 @@ public class NotificationOutbox {
     @Column(nullable = false)
     private String status = "pending";
 
-    @Column(name = "idempotency_key", nullable = false, unique = true)
+    @Column(name = "idempotency_key", nullable = false)
     private String idempotencyKey;
 
     @Column(name = "attempt_count")
@@ -57,6 +57,14 @@ public class NotificationOutbox {
 
     @Column(name = "scheduled_at")
     private Instant scheduledAt;
+
+    /** When the worker started processing this entry (set on claim). */
+    @Column(name = "processing_started_at")
+    private Instant processingStartedAt;
+
+    /** Lease expires at. Worker must complete before this time or the watchdog reclaims. */
+    @Column(name = "lease_until")
+    private Instant leaseUntil;
 
     @Column(name = "created_at", updatable = false)
     private Instant createdAt;
