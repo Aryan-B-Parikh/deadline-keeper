@@ -3,13 +3,9 @@ package com.deadlinekeeper.service;
 import com.deadlinekeeper.dto.NotificationResponse;
 import com.deadlinekeeper.exception.ResourceNotFoundException;
 import com.deadlinekeeper.model.Notification;
-import com.deadlinekeeper.model.NotificationOutbox;
-import com.deadlinekeeper.model.User;
-import com.deadlinekeeper.repository.NotificationOutboxRepository;
 import com.deadlinekeeper.repository.NotificationRepository;
 import org.springframework.stereotype.Service;
 
-import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -17,39 +13,15 @@ import java.util.UUID;
 public class NotificationService {
 
     private final NotificationRepository notificationRepository;
-    private final NotificationOutboxRepository outboxRepository;
 
-    public NotificationService(NotificationRepository notificationRepository,
-                               NotificationOutboxRepository outboxRepository) {
+    public NotificationService(NotificationRepository notificationRepository) {
         this.notificationRepository = notificationRepository;
-        this.outboxRepository = outboxRepository;
-    }
-
-    public void send(User user, String title, String message, UUID eventId) {
-        String idempotencyKey = "direct_%s_%s".formatted(
-                UUID.randomUUID(), Instant.now().toEpochMilli());
-
-        NotificationOutbox outbox = new NotificationOutbox();
-        outbox.setUserId(user.getId());
-        outbox.setEventId(eventId);
-        outbox.setTitle(title);
-        outbox.setMessage(message);
-        outbox.setChannel("in_app");
-        outbox.setIdempotencyKey(idempotencyKey);
-        outbox.setStatus("pending");
-        outbox.setAttemptCount(0);
-        outbox.setMaxAttempts(1);
-        outbox.setScheduledAt(Instant.now());
-        outboxRepository.save(outbox);
     }
 
     public List<NotificationResponse> getUserNotifications(UUID userId, boolean unreadOnly) {
-        List<Notification> notifications;
-        if (unreadOnly) {
-            notifications = notificationRepository.findByUserIdAndIsReadFalseOrderByCreatedAtDesc(userId);
-        } else {
-            notifications = notificationRepository.findByUserIdOrderByCreatedAtDesc(userId);
-        }
+        List<Notification> notifications = unreadOnly
+                ? notificationRepository.findByUserIdAndIsReadFalseOrderByCreatedAtDesc(userId)
+                : notificationRepository.findByUserIdOrderByCreatedAtDesc(userId);
         return notifications.stream().map(this::toResponse).toList();
     }
 
