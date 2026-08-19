@@ -5,6 +5,8 @@ import org.springframework.core.env.Environment;
 import org.springframework.core.env.Profiles;
 import org.springframework.stereotype.Component;
 
+import java.util.Arrays;
+
 @Component
 public class ProductionConfigurationValidator {
     private final Environment environment;
@@ -27,14 +29,25 @@ public class ProductionConfigurationValidator {
         require("GOOGLE_CALENDAR_CLIENT_ID");
         require("GOOGLE_CALENDAR_CLIENT_SECRET");
 
-        String cors = environment.getProperty("cors.allowed-origins", "");
-        if (cors.isBlank() || cors.contains("localhost") || cors.contains("127.0.0.1")) {
-            throw new IllegalStateException("CORS_ALLOWED_ORIGINS must contain only production origins");
-        }
+        validateCors();
 
         String baseUrl = environment.getProperty("app.base-url", "");
         if (!baseUrl.startsWith("https://")) {
             throw new IllegalStateException("APP_BASE_URL must use HTTPS in production");
+        }
+    }
+
+    private void validateCors() {
+        String cors = environment.getProperty("cors.allowed-origins", "");
+        if (cors.isBlank() || cors.contains("*") || cors.contains("localhost") || cors.contains("127.0.0.1")) {
+            throw new IllegalStateException("CORS_ALLOWED_ORIGINS must contain only explicit production origins");
+        }
+
+        boolean invalidOrigin = Arrays.stream(cors.split(","))
+                .map(String::trim)
+                .anyMatch(origin -> !origin.startsWith("https://"));
+        if (invalidOrigin) {
+            throw new IllegalStateException("Every production CORS origin must use HTTPS");
         }
     }
 
