@@ -12,5 +12,7 @@ public interface ReminderRepository extends JpaRepository<Reminder, UUID> {
 
     List<Reminder> findByEventId(UUID eventId);
 
+    List<Reminder> findByEventIdIn(List<UUID> eventIds);
+
     List<Reminder> findByEnabledTrue();
 }
