@@ -177,7 +177,7 @@ Errors use a structured envelope with a request ID for server-side correlation.
     "code": "VALIDATION_ERROR",
     "message": "..."
   },
-  "requestId": "..."
+  "requestId": "request-id"
 }
 ```
 
