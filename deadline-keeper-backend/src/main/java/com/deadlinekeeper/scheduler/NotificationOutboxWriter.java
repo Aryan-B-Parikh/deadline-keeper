@@ -19,11 +19,14 @@ public class NotificationOutboxWriter {
 
     private final NotificationOutboxRepository outboxRepository;
     private final ReminderDeliveryRepository deliveryRepository;
+    private final OutboxRetryPolicy retryPolicy;
 
     public NotificationOutboxWriter(NotificationOutboxRepository outboxRepository,
-                                    ReminderDeliveryRepository deliveryRepository) {
+                                    ReminderDeliveryRepository deliveryRepository,
+                                    OutboxRetryPolicy retryPolicy) {
         this.outboxRepository = outboxRepository;
         this.deliveryRepository = deliveryRepository;
+        this.retryPolicy = retryPolicy;
     }
 
     @Transactional
@@ -59,12 +62,7 @@ public class NotificationOutboxWriter {
                 log.warn("Lost ownership of outbox {} - skipping markFailed", entry.getId());
             }
         } else {
-            long backoffSeconds = switch (outbox.getAttemptCount()) {
-                case 1 -> 30;
-                case 2 -> 120;
-                default -> 600;
-            };
-            Instant nextRetry = Instant.now().plusSeconds(backoffSeconds);
+            Instant nextRetry = retryPolicy.calculateNextRetry(outbox.getAttemptCount());
             int updated = outboxRepository.markRetryIfOwned(entry.getId(), nextRetry, error);
             if (updated == 0) {
                 log.warn("Lost ownership of outbox {} - skipping markRetry", entry.getId());

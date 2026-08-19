@@ -38,7 +38,7 @@ class OutboxConcurrencyTest {
     @BeforeEach
     void setUp() {
         when(emailChannel.getChannelName()).thenReturn("email");
-        writer = new NotificationOutboxWriter(outboxRepository, deliveryRepository);
+        writer = new NotificationOutboxWriter(outboxRepository, deliveryRepository, new OutboxRetryPolicy(30, 600));
     }
 
     @Test
@@ -127,7 +127,7 @@ class OutboxConcurrencyTest {
                 try {
                     startLatch.await();
                     NotificationOutboxProcessor workerProcessor = new NotificationOutboxProcessor(
-                            outboxRepository, writer, deliveryRepository, userRepository, List.of(emailChannel), 120, 50, 30);
+                            outboxRepository, writer, deliveryRepository, userRepository, List.of(emailChannel), new OutboxRetryPolicy(30, 600), 120, 50);
 
                     while (!pendingQueue.isEmpty()) {
                         workerProcessor.processPending();

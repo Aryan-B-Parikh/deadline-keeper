@@ -18,16 +18,11 @@ BEGIN
     END IF;
 END $$;
 
--- Fallback for any legacy rows missing due_date entirely
-UPDATE events 
-SET due_at = COALESCE(created_at, NOW()) 
-WHERE due_at IS NULL;
-
 -- Step 3: Hard assertion verifying zero NULLs in due_at
 DO $$
 BEGIN
     IF EXISTS (SELECT 1 FROM events WHERE due_at IS NULL) THEN
-        RAISE EXCEPTION 'V8 migration failed: events.due_at still contains NULL values';
+        RAISE EXCEPTION 'V8 failed: unable to reconstruct due_at for existing events';
     END IF;
 END $$;
 

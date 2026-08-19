@@ -49,8 +49,7 @@ class OAuthSecurityTest {
     @Test
     @DisplayName("First callback with valid state succeeds")
     void firstCallbackSucceeds() {
-        when(connectionRepository.findByOauthState(validState)).thenReturn(Optional.of(conn));
-        when(connectionRepository.consumeOauthState(connectionId, validState)).thenReturn(1);
+        when(calendarSyncService.consumeStateAndGetUserId(validState)).thenReturn(userId);
 
         ResponseEntity<Map<String, String>> response = controller.callback("auth-code-xyz", validState);
 
@@ -62,9 +61,8 @@ class OAuthSecurityTest {
     @Test
     @DisplayName("Second callback with same state fails (replay attack prevented)")
     void replayCallbackFails() {
-        when(connectionRepository.findByOauthState(validState)).thenReturn(Optional.of(conn));
-        // Atomic consume returns 0 because state was already consumed
-        when(connectionRepository.consumeOauthState(connectionId, validState)).thenReturn(0);
+        // Atomic consume returns null because state was already consumed
+        when(calendarSyncService.consumeStateAndGetUserId(validState)).thenReturn(null);
 
         ResponseEntity<Map<String, String>> response = controller.callback("auth-code-xyz", validState);
 
@@ -74,15 +72,41 @@ class OAuthSecurityTest {
     }
 
     @Test
-    @DisplayName("Expired state is rejected")
-    void expiredStateFails() {
+    @DisplayName("Missing state parameter is rejected")
+    void missingStateFails() {
+        ResponseEntity<Map<String, String>> response = controller.callback("auth-code-xyz", "");
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        verify(calendarSyncService, never()).handleCallback(any(), any());
+    }
+
+    @Test
+    @DisplayName("Service-level atomic consume checks expiry and updates repository")
+    void serviceAtomicConsume() {
+        CalendarSyncService service = new CalendarSyncService(
+                null, connectionRepository, null, null, null, null, null);
+
+        when(connectionRepository.findByOauthState(validState)).thenReturn(Optional.of(conn));
+        when(connectionRepository.consumeOauthState(connectionId, validState)).thenReturn(1);
+
+        UUID consumedUserId = service.consumeStateAndGetUserId(validState);
+
+        assertThat(consumedUserId).isEqualTo(userId);
+        verify(connectionRepository).consumeOauthState(connectionId, validState);
+    }
+
+    @Test
+    @DisplayName("Service-level atomic consume rejects expired state")
+    void serviceRejectsExpiredState() {
+        CalendarSyncService service = new CalendarSyncService(
+                null, connectionRepository, null, null, null, null, null);
+
         conn.setOauthStateExpiresAt(Instant.now().minusSeconds(10));
         when(connectionRepository.findByOauthState(validState)).thenReturn(Optional.of(conn));
 
-        ResponseEntity<Map<String, String>> response = controller.callback("auth-code-xyz", validState);
+        UUID consumedUserId = service.consumeStateAndGetUserId(validState);
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(consumedUserId).isNull();
         verify(connectionRepository, never()).consumeOauthState(any(), any());
-        verify(calendarSyncService, never()).handleCallback(any(), any());
     }
 }

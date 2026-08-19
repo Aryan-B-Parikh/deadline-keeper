@@ -44,7 +44,6 @@ public class CalendarController {
     }
 
     @GetMapping("/callback")
-    @org.springframework.transaction.annotation.Transactional
     public ResponseEntity<Map<String, String>> callback(
             @RequestParam("code") String code,
             @RequestParam(value = "state", required = false) String state) {
@@ -53,20 +52,13 @@ public class CalendarController {
             return ResponseEntity.status(400).body(Map.of("error", "Missing OAuth state parameter"));
         }
 
-        CalendarConnection conn = connectionRepository.findByOauthState(state)
-                .orElse(null);
-
-        if (conn == null || conn.getOauthStateExpiresAt() == null || Instant.now().isAfter(conn.getOauthStateExpiresAt())) {
-            return ResponseEntity.status(400).body(Map.of("error", "Invalid or expired OAuth state"));
+        // Transaction 1: Atomic single-use state consumption commits independently
+        UUID userId = calendarSyncService.consumeStateAndGetUserId(state);
+        if (userId == null) {
+            return ResponseEntity.status(400).body(Map.of("error", "Invalid, expired, or already consumed OAuth state"));
         }
 
-        // Single-use atomic consumption: prevents replay attacks
-        int consumed = connectionRepository.consumeOauthState(conn.getId(), state);
-        if (consumed == 0) {
-            return ResponseEntity.status(400).body(Map.of("error", "OAuth state already consumed (replay detected)"));
-        }
-
-        UUID userId = conn.getUserId();
+        // External provider call + Transaction 2: exchange code and persist tokens
         calendarSyncService.handleCallback(userId, code);
         return ResponseEntity.ok(Map.of("status", "connected"));
     }

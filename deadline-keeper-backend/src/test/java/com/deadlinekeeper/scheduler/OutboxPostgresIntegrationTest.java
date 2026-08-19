@@ -83,7 +83,7 @@ class OutboxPostgresIntegrationTest {
 
         processor = new NotificationOutboxProcessor(
                 outboxRepository, writer, deliveryRepository, userRepository,
-                List.of(emailChannel), 120, 50, 30);
+                List.of(emailChannel), new OutboxRetryPolicy(30, 600), 120, 50);
 
         outboxRepository.deleteAll();
         deliveryRepository.deleteAll();

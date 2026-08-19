@@ -27,27 +27,33 @@ public class NotificationOutboxProcessor {
     private final ReminderDeliveryRepository deliveryRepository;
     private final UserRepository userRepository;
     private final List<NotificationChannel> channels;
+    private final OutboxRetryPolicy retryPolicy;
 
     private final long leaseSeconds;
     private final int claimLimit;
-    private final long retryBaseSeconds;
 
     public NotificationOutboxProcessor(NotificationOutboxRepository outboxRepository,
                                        NotificationOutboxWriter writer,
                                        ReminderDeliveryRepository deliveryRepository,
                                        UserRepository userRepository,
                                        List<NotificationChannel> channels,
+                                       OutboxRetryPolicy retryPolicy,
                                        @org.springframework.beans.factory.annotation.Value("${outbox.lease-seconds:120}") long leaseSeconds,
-                                       @org.springframework.beans.factory.annotation.Value("${outbox.claim-limit:50}") int claimLimit,
-                                       @org.springframework.beans.factory.annotation.Value("${outbox.retry-base-seconds:30}") long retryBaseSeconds) {
+                                       @org.springframework.beans.factory.annotation.Value("${outbox.claim-limit:50}") int claimLimit) {
+        if (leaseSeconds <= 0) {
+            throw new IllegalArgumentException("outbox.lease-seconds must be > 0");
+        }
+        if (claimLimit <= 0) {
+            throw new IllegalArgumentException("outbox.claim-limit must be > 0");
+        }
         this.outboxRepository = outboxRepository;
         this.writer = writer;
         this.deliveryRepository = deliveryRepository;
         this.userRepository = userRepository;
         this.channels = channels;
+        this.retryPolicy = retryPolicy;
         this.leaseSeconds = leaseSeconds;
         this.claimLimit = claimLimit;
-        this.retryBaseSeconds = retryBaseSeconds;
     }
 
     public void processPending() {
@@ -111,11 +117,15 @@ public class NotificationOutboxProcessor {
 
     @Transactional
     public int reclaimExpiredLeases() {
+        List<UUID> expiredFailedDeliveryIds = outboxRepository.findExpiredDeliveryIdsExceedingMaxAttempts();
         int failed = outboxRepository.failExpiredLeasesExceedingMaxAttempts();
-        int reclaimed = outboxRepository.reclaimExpiredLeasesWithBackoff(retryBaseSeconds);
-        if (failed > 0) {
-            log.info("Watchdog marked {} expired leases as permanently FAILED (max attempts exceeded)", failed);
+        if (failed > 0 && expiredFailedDeliveryIds != null && !expiredFailedDeliveryIds.isEmpty()) {
+            deliveryRepository.markDeliveriesFailed(expiredFailedDeliveryIds, "Watchdog timeout - max attempts exceeded");
+            log.info("Watchdog marked {} expired leases and deliveries as permanently FAILED (max attempts exceeded)", failed);
         }
+
+        long backoff = retryPolicy.getRetryBaseSeconds();
+        int reclaimed = outboxRepository.reclaimExpiredLeasesWithBackoff(backoff);
         if (reclaimed > 0) {
             log.warn("Watchdog reclaimed {} expired leases for retry", reclaimed);
         }

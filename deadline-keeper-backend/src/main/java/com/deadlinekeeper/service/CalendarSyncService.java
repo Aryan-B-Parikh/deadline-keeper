@@ -24,6 +24,8 @@ import com.google.api.services.calendar.model.Events;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -91,6 +93,26 @@ public class CalendarSyncService {
             throw new ExternalServiceException("Google Calendar",
                     "Failed to build authorization URL: " + e.getMessage(), e);
         }
+    }
+
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
+    public UUID consumeStateAndGetUserId(String state) {
+        if (state == null || state.isBlank()) {
+            return null;
+        }
+
+        CalendarConnection conn = connectionRepository.findByOauthState(state)
+                .orElse(null);
+
+        if (conn == null || conn.getOauthStateExpiresAt() == null || Instant.now().isAfter(conn.getOauthStateExpiresAt())) {
+            return null;
+        }
+
+        int consumed = connectionRepository.consumeOauthState(conn.getId(), state);
+        if (consumed == 0) {
+            return null;
+        }
+        return conn.getUserId();
     }
 
     public void handleCallback(UUID userId, String authorizationCode) {

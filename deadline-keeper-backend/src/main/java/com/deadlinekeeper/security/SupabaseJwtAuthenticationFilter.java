@@ -123,12 +123,19 @@ public class SupabaseJwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         Set<String> audience = claims.getAudience();
-        String expectedAudience = supabaseConfig.getUrl()
+        String projectAudience = supabaseConfig.getUrl() != null ? supabaseConfig.getUrl()
                 .replace("https://", "")
                 .replace("http://", "")
-                .split("\\.")[0];
-        if (audience != null && !audience.isEmpty() && !audience.contains(expectedAudience)) {
-            log.warn("JWT audience mismatch: expected={}, got={}", expectedAudience, audience);
+                .split("\\.")[0] : "";
+
+        if (audience == null || audience.isEmpty()) {
+            throw new SecurityException("JWT missing required audience claim");
+        }
+
+        boolean validAudience = audience.contains("authenticated") 
+                || (!projectAudience.isEmpty() && audience.contains(projectAudience));
+        if (!validAudience) {
+            throw new SecurityException("Invalid JWT audience: " + audience);
         }
 
         if (claims.getExpiration() == null) {

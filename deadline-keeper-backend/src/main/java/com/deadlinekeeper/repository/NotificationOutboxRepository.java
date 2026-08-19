@@ -88,6 +88,18 @@ public interface NotificationOutboxRepository extends JpaRepository<Notification
                           @Param("error") String error);
 
     /**
+     * Find delivery IDs for expired processing rows whose attempt_count >= max_attempts.
+     */
+    @Query(value = """
+            SELECT delivery_id FROM notification_outbox
+            WHERE status = 'processing'
+              AND lease_until < NOW()
+              AND attempt_count >= max_attempts
+              AND delivery_id IS NOT NULL
+            """, nativeQuery = true)
+    List<UUID> findExpiredDeliveryIdsExceedingMaxAttempts();
+
+    /**
      * Reclaim expired processing rows whose attempt_count >= max_attempts by transitioning to 'failed'.
      */
     @Modifying
@@ -119,18 +131,6 @@ public interface NotificationOutboxRepository extends JpaRepository<Notification
               AND attempt_count < max_attempts
             """, nativeQuery = true)
     int reclaimExpiredLeasesWithBackoff(@Param("backoffSeconds") long backoffSeconds);
-
-    @Modifying
-    @Query(value = """
-            UPDATE notification_outbox
-            SET status = 'pending',
-                processing_started_at = NULL,
-                lease_until = NULL,
-                last_error = 'Lease expired (worker crash)'
-            WHERE status = 'processing'
-              AND lease_until < NOW()
-            """, nativeQuery = true)
-    int reclaimExpiredLeases();
 
     List<NotificationOutbox> findByStatusOrderByScheduledAtAsc(String status);
 

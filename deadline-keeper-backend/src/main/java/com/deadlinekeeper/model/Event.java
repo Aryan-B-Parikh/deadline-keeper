@@ -48,7 +48,7 @@ public class Event {
     private String sourceFileUrl;
 
     @Column(name = "ai_confidence")
-    private Float aiConfidence = 1.0f;
+    private Float aiConfidence;
 
     @Column(name = "confirmation_status")
     private String confirmationStatus = "system";
@@ -71,9 +71,6 @@ public class Event {
     protected void onCreate() {
         createdAt = Instant.now();
         updatedAt = Instant.now();
-        if (dueAt == null) {
-            dueAt = Instant.now();
-        }
     }
 
     @PreUpdate
@@ -81,7 +78,7 @@ public class Event {
         updatedAt = Instant.now();
     }
 
-    // Helper conversion methods derived from canonical dueAt + timezone
+    // Helper conversion methods derived from canonical dueAt + timezone for API compatibility
     @Transient
     public LocalDate getDueDate() {
         if (dueAt == null) return null;
@@ -96,7 +93,7 @@ public class Event {
 
     @Transient
     public Float getConfidenceScore() {
-        return aiConfidence != null ? aiConfidence : 1.0f;
+        return aiConfidence;
     }
 
     private ZoneId getZoneIdSafe() {

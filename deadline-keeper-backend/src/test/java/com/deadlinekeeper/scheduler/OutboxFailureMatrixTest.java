@@ -49,9 +49,10 @@ class OutboxFailureMatrixTest {
     void setUp() {
         when(emailChannel.getChannelName()).thenReturn("email");
 
-        writer = new NotificationOutboxWriter(outboxRepository, deliveryRepository);
+        OutboxRetryPolicy retryPolicy = new OutboxRetryPolicy(30, 600);
+        writer = new NotificationOutboxWriter(outboxRepository, deliveryRepository, retryPolicy);
         processor = new NotificationOutboxProcessor(
-                outboxRepository, writer, deliveryRepository, userRepository, List.of(emailChannel), 120, 50, 30);
+                outboxRepository, writer, deliveryRepository, userRepository, List.of(emailChannel), retryPolicy, 120, 50);
 
         user = new User();
         user.setId(userId);
@@ -115,13 +116,16 @@ class OutboxFailureMatrixTest {
     }
 
     @Test
-    @DisplayName("Worker crashes during send -> watchdog reclaims expired lease and fails max attempts")
+    @DisplayName("Worker crashes during send -> watchdog reclaims expired lease and fails max attempts with delivery sync")
     void watchdogReclaimsExpiredLease() {
+        when(outboxRepository.findExpiredDeliveryIdsExceedingMaxAttempts()).thenReturn(List.of(deliveryId));
         when(outboxRepository.failExpiredLeasesExceedingMaxAttempts()).thenReturn(2);
         when(outboxRepository.reclaimExpiredLeasesWithBackoff(30)).thenReturn(3);
 
         int totalReclaimed = processor.reclaimExpiredLeases();
 
+        verify(outboxRepository).findExpiredDeliveryIdsExceedingMaxAttempts();
+        verify(deliveryRepository).markDeliveriesFailed(eq(List.of(deliveryId)), contains("Watchdog timeout"));
         verify(outboxRepository).failExpiredLeasesExceedingMaxAttempts();
         verify(outboxRepository).reclaimExpiredLeasesWithBackoff(30);
         assertThat(totalReclaimed).isEqualTo(5);

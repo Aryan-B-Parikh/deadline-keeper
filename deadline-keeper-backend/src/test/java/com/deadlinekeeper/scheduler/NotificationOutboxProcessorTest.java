@@ -49,8 +49,9 @@ class NotificationOutboxProcessorTest {
         mockChannel = mock(NotificationChannel.class);
         when(mockChannel.getChannelName()).thenReturn("email");
 
+        OutboxRetryPolicy retryPolicy = new OutboxRetryPolicy(30, 600);
         processor = new NotificationOutboxProcessor(
-                outboxRepository, writer, deliveryRepository, userRepository, List.of(mockChannel), 120, 50, 30);
+                outboxRepository, writer, deliveryRepository, userRepository, List.of(mockChannel), retryPolicy, 120, 50);
 
         user = new User();
         user.setId(userId);
@@ -157,7 +158,7 @@ class NotificationOutboxProcessorTest {
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
 
         processor = new NotificationOutboxProcessor(
-                outboxRepository, writer, deliveryRepository, userRepository, List.of(), 120, 50, 30);
+                outboxRepository, writer, deliveryRepository, userRepository, List.of(), new OutboxRetryPolicy(30, 600), 120, 50);
 
         processor.sendViaProvider(outbox);
 
@@ -233,7 +234,7 @@ class NotificationOutboxProcessorTest {
     @Test
     @DisplayName("Lost ownership during markSent -> delivery not marked sent")
     void lostOwnershipMarkSent() {
-        NotificationOutboxWriter realWriter = new NotificationOutboxWriter(outboxRepository, deliveryRepository);
+        NotificationOutboxWriter realWriter = new NotificationOutboxWriter(outboxRepository, deliveryRepository, new OutboxRetryPolicy(30, 600));
         when(outboxRepository.markSentIfOwned(outboxId)).thenReturn(0);
 
         realWriter.markSent(outbox);
@@ -245,7 +246,7 @@ class NotificationOutboxProcessorTest {
     @Test
     @DisplayName("Held ownership during markSent -> delivery marked sent")
     void heldOwnershipMarkSent() {
-        NotificationOutboxWriter realWriter = new NotificationOutboxWriter(outboxRepository, deliveryRepository);
+        NotificationOutboxWriter realWriter = new NotificationOutboxWriter(outboxRepository, deliveryRepository, new OutboxRetryPolicy(30, 600));
         when(outboxRepository.markSentIfOwned(outboxId)).thenReturn(1);
         when(deliveryRepository.findById(deliveryId)).thenReturn(Optional.of(delivery));
 
