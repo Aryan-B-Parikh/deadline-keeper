@@ -45,7 +45,6 @@ outbox:
   retry-base-seconds: ${OUTBOX_RETRY_BASE_SECONDS:30}
   retry-max-seconds: ${OUTBOX_RETRY_MAX_SECONDS:600}
 
-
 # Supabase
 supabase:
   url: ${SUPABASE_URL:}
@@ -64,7 +63,6 @@ sendgrid:
   from-email: ${SENDGRID_FROM_EMAIL:}
   inbox-parse-domain: ${SENDGRID_INBOX_PARSE_DOMAIN:}
   webhook-secret: ${SENDGRID_WEBHOOK_SECRET:}
-  webhook-token: ${SENDGRID_WEBHOOK_TOKEN:}
 
 # Google Calendar
 google:
