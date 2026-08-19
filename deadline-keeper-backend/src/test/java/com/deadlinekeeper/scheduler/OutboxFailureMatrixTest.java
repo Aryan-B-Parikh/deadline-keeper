@@ -37,10 +37,10 @@ class OutboxFailureMatrixTest {
     private NotificationOutboxWriter writer;
     private NotificationOutboxProcessor processor;
 
-    private UUID userId = UUID.randomUUID();
-    private UUID eventId = UUID.randomUUID();
-    private UUID deliveryId = UUID.randomUUID();
-    private UUID outboxId = UUID.randomUUID();
+    private final UUID userId = UUID.randomUUID();
+    private final UUID eventId = UUID.randomUUID();
+    private final UUID deliveryId = UUID.randomUUID();
+    private final UUID outboxId = UUID.randomUUID();
     private User user;
     private ReminderDelivery delivery;
     private NotificationOutbox outbox;
@@ -79,7 +79,7 @@ class OutboxFailureMatrixTest {
     @Test
     @DisplayName("Provider timeout -> backoff retry scheduled")
     void providerTimeoutSchedulesRetry() {
-        when(outboxRepository.claimPendingJobIds(50, NotificationOutboxProcessor.LEASE_SECONDS)).thenReturn(List.of(outboxId));
+        when(outboxRepository.claimPendingJobIds(50, 120L)).thenReturn(List.of(outboxId));
         when(outboxRepository.findAllById(List.of(outboxId))).thenReturn(List.of(outbox));
         when(deliveryRepository.findById(deliveryId)).thenReturn(Optional.of(delivery));
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
@@ -87,7 +87,7 @@ class OutboxFailureMatrixTest {
         when(outboxRepository.markRetryIfOwned(eq(outboxId), any(Instant.class), anyString())).thenReturn(1);
 
         doThrow(new RuntimeException("Connection timed out"))
-                .when(emailChannel).send(any(), any(), any(), any());
+                .when(emailChannel).send(any(), any(), any(), any(), any());
 
         processor.processPending();
 
@@ -99,7 +99,7 @@ class OutboxFailureMatrixTest {
     @DisplayName("Max attempts reached -> marked permanently failed")
     void maxAttemptsReachedFailsPermanently() {
         outbox.setAttemptCount(3);
-        when(outboxRepository.claimPendingJobIds(50, NotificationOutboxProcessor.LEASE_SECONDS)).thenReturn(List.of(outboxId));
+        when(outboxRepository.claimPendingJobIds(50, 120L)).thenReturn(List.of(outboxId));
         when(outboxRepository.findAllById(List.of(outboxId))).thenReturn(List.of(outbox));
         when(deliveryRepository.findById(deliveryId)).thenReturn(Optional.of(delivery));
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
@@ -107,7 +107,7 @@ class OutboxFailureMatrixTest {
         when(outboxRepository.markFailedIfOwned(eq(outboxId), anyString())).thenReturn(1);
 
         doThrow(new RuntimeException("500 Internal Server Error"))
-                .when(emailChannel).send(any(), any(), any(), any());
+                .when(emailChannel).send(any(), any(), any(), any(), any());
 
         processor.processPending();
 
