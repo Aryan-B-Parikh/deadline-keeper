@@ -7,6 +7,18 @@ async function getAuthHeader(): Promise<string | null> {
   return data.session?.access_token ?? null;
 }
 
+function getApiError(body: unknown, status: number): string {
+  if (body && typeof body === 'object' && 'error' in body) {
+    const error = (body as { error?: unknown }).error;
+    if (typeof error === 'string') return error;
+    if (error && typeof error === 'object' && 'message' in error) {
+      const message = (error as { message?: unknown }).message;
+      if (typeof message === 'string') return message;
+    }
+  }
+  return `API error: ${status}`;
+}
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = await getAuthHeader();
   if (!token) throw new Error('Not authenticated');
@@ -21,8 +33,8 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   });
 
   if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || `API error: ${res.status}`);
+    const body = await res.json().catch(() => null);
+    throw new Error(getApiError(body, res.status));
   }
 
   if (res.status === 204) return null as T;
@@ -40,8 +52,8 @@ async function uploadRequest<T>(path: string, formData: FormData): Promise<T> {
   });
 
   if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || `API error: ${res.status}`);
+    const body = await res.json().catch(() => null);
+    throw new Error(getApiError(body, res.status));
   }
 
   return res.json();
@@ -50,7 +62,7 @@ async function uploadRequest<T>(path: string, formData: FormData): Promise<T> {
 // Event API
 export const eventApi = {
   list: (status?: string) =>
-    request<Event[]>(`/api/events${status ? `?status=${status}` : ''}`),
+    request<Event[]>(`/api/events${status ? `?status=${encodeURIComponent(status)}` : ''}`),
 
   get: (id: string) => request<Event>(`/api/events/${id}`),
 
@@ -130,6 +142,7 @@ export interface Reminder {
 export interface ReminderInput {
   offsetSeconds: number;
   channel: string;
+  enabled?: boolean;
 }
 
 export interface Event {
@@ -139,7 +152,7 @@ export interface Event {
   dueAt: string;
   timezone: string;
   source: string;
-  aiConfidence: number;
+  aiConfidence: number | null;
   status: string;
   reminders: Reminder[];
   notes: string | null;
@@ -168,7 +181,7 @@ export interface ExtractedEvent {
   type: string;
   dueAt: string;
   timezone: string | null;
-  aiConfidence: number;
+  aiConfidence: number | null;
   needsClarification: boolean;
 }
 
