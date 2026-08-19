@@ -6,6 +6,8 @@ import com.deadlinekeeper.repository.NotificationRepository;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Component;
 
+import java.util.UUID;
+
 @Component
 public class InAppNotificationChannel implements NotificationChannel {
 
@@ -16,7 +18,7 @@ public class InAppNotificationChannel implements NotificationChannel {
     }
 
     @Override
-    public void send(User user, String title, String message, String idempotencyKey) {
+    public void send(User user, String title, String message, String idempotencyKey, UUID eventId) {
         if (idempotencyKey == null || idempotencyKey.isBlank()) {
             throw new NotificationPermanentException("In-app notification requires an idempotency key");
         }
@@ -25,6 +27,7 @@ public class InAppNotificationChannel implements NotificationChannel {
 
         Notification notification = new Notification();
         notification.setUserId(user.getId());
+        notification.setEventId(eventId);
         notification.setTitle(title);
         notification.setMessage(message);
         notification.setChannel("in_app");
