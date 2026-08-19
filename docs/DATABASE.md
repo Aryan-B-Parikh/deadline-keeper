@@ -19,7 +19,7 @@ users
 
 Application profile linked to the authenticated Supabase user.
 
-Important fields include `id`, `email`, `display_name`, `timezone`, `plan`, notification preferences, and timestamps.
+Important fields include `id`, `email`, `display_name`, `timezone`, `plan`, notification preferences, forwarding token, and timestamps.
 
 ## `events`
 
@@ -52,8 +52,8 @@ First-class reminder configuration replacing the old event-level reminder array.
 |---|---|
 | `id` | UUID primary key |
 | `event_id` | Owning event; cascades on event deletion |
-| `offset_seconds` | Seconds before `due_at` |
-| `channel` | `email`, `in_app`, or `sms` |
+| `offset_seconds` | Seconds before `due_at`, limited to the scheduler's seven-day planning window |
+| `channel` | `email` or `in_app` |
 | `enabled` | Whether this reminder is active |
 
 ## `reminder_deliveries`
@@ -73,7 +73,7 @@ Important fields include:
 - `id`
 - `user_id`
 - `event_id`
-- `delivery_id`
+- `delivery_id` (nullable for direct notifications)
 - `channel`
 - `status`
 - `idempotency_key`
@@ -87,11 +87,11 @@ Important fields include:
 
 Outbox states are `pending`, `processing`, `sent`, and `failed`.
 
-Workers atomically claim pending jobs using PostgreSQL `FOR UPDATE SKIP LOCKED` and `UPDATE ... RETURNING id`. A lease prevents stale workers from completing transitions after ownership has expired.
+Workers atomically claim only due pending jobs using PostgreSQL `FOR UPDATE SKIP LOCKED` and `UPDATE ... RETURNING id`. A lease prevents stale workers from completing transitions after ownership has expired.
 
 ## `notifications`
 
-In-app notification records. Access is scoped to the authenticated user through application-level authorization.
+In-app notification records. Each notification has a deterministic `idempotency_key` matching its outbox identity, preventing duplicate in-app records during worker retries.
 
 ## `calendar_connections`
 
@@ -103,15 +103,15 @@ Sensitive access and refresh tokens are encrypted before persistence. OAuth stat
 
 Maps external provider events to local deadlines.
 
-The provider/external identifier is unique, and synchronization verifies that an existing external record belongs to the current user before updating the linked deadline.
+External identity is scoped by `(user_id, provider, external_id)` because provider event IDs are not globally unique across users. Synchronization verifies ownership before updating or cancelling a linked deadline.
 
 ## Indexes and constraints
 
-The schema includes indexes for common user/deadline and scheduler queries, foreign keys with appropriate cascading behavior, and status/channel checks. The V9 migration aligns the `events.status` constraint with the actual application state machine.
+The schema includes indexes for common user/deadline and scheduler queries, foreign keys with appropriate cascading behavior, and status/channel checks. Forward migrations align event statuses, supported notification channels, external-event ownership, notification idempotency, and reminder offset limits.
 
 ## Security model
 
-The backend derives ownership from the authenticated Supabase JWT. Controllers and services scope event, notification, and calendar operations by the current user ID. Supabase RLS exists for database-side protection where applicable, but the Spring Boot service also performs explicit user-scoped queries.
+The backend derives ownership from the authenticated Supabase JWT. Controllers and services scope event, notification, and calendar operations by the current user ID. The inbound email webhook uses each user's high-entropy forwarding token from the recipient address and does not fall back to sender-email identity.
 
 ## Migration rule
 
