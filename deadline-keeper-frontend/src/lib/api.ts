@@ -59,79 +59,51 @@ async function uploadRequest<T>(path: string, formData: FormData): Promise<T> {
   return res.json();
 }
 
-// Event API
 export const eventApi = {
   list: (status?: string) =>
     request<Event[]>(`/api/events${status ? `?status=${encodeURIComponent(status)}` : ''}`),
-
   get: (id: string) => request<Event>(`/api/events/${id}`),
-
-  create: (data: CreateEventInput) =>
-    request<Event>('/api/events', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    }),
-
-  update: (id: string, data: CreateEventInput) =>
-    request<Event>(`/api/events/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    }),
-
-  delete: (id: string) =>
-    request<void>(`/api/events/${id}`, { method: 'DELETE' }),
-
-  markDone: (id: string) =>
-    request<Event>(`/api/events/${id}/done`, { method: 'POST' }),
-
-  snooze: (id: string, duration: string) =>
-    request<Event>(`/api/events/${id}/snooze`, {
-      method: 'POST',
-      body: JSON.stringify({ duration }),
-    }),
-
-  extract: (formData: FormData) =>
-    uploadRequest<ExtractionResult>('/api/events/extract', formData),
-
-  confirmExtract: (data: ExtractConfirmInput) =>
-    request<Event[]>('/api/events/extract/confirm', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    }),
+  create: (data: CreateEventInput) => request<Event>('/api/events', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }),
+  update: (id: string, data: CreateEventInput) => request<Event>(`/api/events/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  }),
+  delete: (id: string) => request<void>(`/api/events/${id}`, { method: 'DELETE' }),
+  markDone: (id: string) => request<Event>(`/api/events/${id}/done`, { method: 'POST' }),
+  snooze: (id: string, duration: string) => request<Event>(`/api/events/${id}/snooze`, {
+    method: 'POST',
+    body: JSON.stringify({ duration }),
+  }),
+  extract: (formData: FormData) => uploadRequest<ExtractionResult>('/api/events/extract', formData),
+  confirmExtract: (data: ExtractConfirmInput) => request<Event[]>('/api/events/extract/confirm', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }),
 };
 
-// Notification API
 export const notificationApi = {
-  list: (unreadOnly = false) =>
-    request<Notification[]>(`/api/notifications?unreadOnly=${unreadOnly}`),
-
-  markRead: (id: string) =>
-    request<void>(`/api/notifications/${id}/read`, { method: 'POST' }),
-
+  list: (unreadOnly = false) => request<Notification[]>(`/api/notifications?unreadOnly=${unreadOnly}`),
+  markRead: (id: string) => request<void>(`/api/notifications/${id}/read`, { method: 'POST' }),
   unreadCount: () => request<{ count: number }>('/api/notifications/unread-count'),
 };
 
-// User API
 export const userApi = {
   getProfile: () => request<UserProfile>('/api/user/profile'),
-
-  updateProfile: (data: UpdateProfileInput) =>
-    request<UserProfile>('/api/user/profile', {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    }),
+  updateProfile: (data: UpdateProfileInput) => request<UserProfile>('/api/user/profile', {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  }),
 };
 
-// Calendar API
 export const calendarApi = {
   startSync: () => `${API_URL}/api/calendar/sync/start`,
-  triggerSync: () =>
-    request<{ status: string }>('/api/calendar/sync/trigger', { method: 'POST' }),
-  disconnect: () =>
-    request<void>('/api/calendar/sync', { method: 'DELETE' }),
+  triggerSync: () => request<{ status: string }>('/api/calendar/sync/trigger', { method: 'POST' }),
+  disconnect: () => request<void>('/api/calendar/sync', { method: 'DELETE' }),
 };
 
-// Types
 export interface Reminder {
   id: string;
   offsetSeconds: number;
@@ -142,7 +114,6 @@ export interface Reminder {
 export interface ReminderInput {
   offsetSeconds: number;
   channel: string;
-  enabled?: boolean;
 }
 
 export interface Event {
