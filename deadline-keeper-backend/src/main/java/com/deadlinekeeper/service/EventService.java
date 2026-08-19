@@ -120,12 +120,16 @@ public class EventService {
     private Duration parseDuration(String duration) {
         if (duration == null || duration.isBlank()) return Duration.ofDays(1);
         try {
-            if (duration.endsWith("d")) return Duration.ofDays(Long.parseLong(duration.substring(0, duration.length() - 1)));
-            if (duration.endsWith("h")) return Duration.ofHours(Long.parseLong(duration.substring(0, duration.length() - 1)));
-            if (duration.endsWith("m")) return Duration.ofMinutes(Long.parseLong(duration.substring(0, duration.length() - 1)));
+            long amount;
+            if (duration.endsWith("d")) amount = Long.parseLong(duration.substring(0, duration.length() - 1)) * 86_400L;
+            else if (duration.endsWith("h")) amount = Long.parseLong(duration.substring(0, duration.length() - 1)) * 3_600L;
+            else if (duration.endsWith("m")) amount = Long.parseLong(duration.substring(0, duration.length() - 1)) * 60L;
+            else throw new ValidationException("Invalid snooze duration: " + duration);
+
+            if (amount <= 0) throw new ValidationException("Snooze duration must be positive");
+            return Duration.ofSeconds(amount);
         } catch (NumberFormatException e) {
             throw new ValidationException("Invalid snooze duration: " + duration);
         }
-        throw new ValidationException("Invalid snooze duration: " + duration);
     }
 }
