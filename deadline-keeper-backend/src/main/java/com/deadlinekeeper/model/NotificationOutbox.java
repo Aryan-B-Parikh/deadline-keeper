@@ -25,6 +25,9 @@ public class NotificationOutbox {
     @Column(name = "event_id")
     private UUID eventId;
 
+    @Column(name = "delivery_id")
+    private UUID deliveryId;
+
     @Column(nullable = false)
     private String title;
 
@@ -48,6 +51,9 @@ public class NotificationOutbox {
 
     @Column(name = "last_error")
     private String lastError;
+
+    @Column(name = "next_retry_at")
+    private Instant nextRetryAt;
 
     @Column(name = "scheduled_at")
     private Instant scheduledAt;

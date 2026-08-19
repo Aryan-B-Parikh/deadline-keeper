@@ -68,7 +68,7 @@ public class ReminderDeliveryService {
                         .format(DateTimeFormatter.ofPattern("MMM d, yyyy HH:mm")));
 
         // Enqueue to outbox — delivery status stays PENDING until outbox processor confirms
-        outboxService.enqueue(delivery.getId(), user.getId(), event.getId(), title, message, reminder.getChannel());
+        outboxService.enqueue(delivery.getId(), user.getId(), event.getId(), title, message, reminder.getChannel(), fireTime);
     }
 
     private String formatDuration(Duration duration) {

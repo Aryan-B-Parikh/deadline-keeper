@@ -23,20 +23,22 @@ public class NotificationOutboxService {
     }
 
     @Transactional
-    public void enqueue(UUID deliveryId, UUID userId, UUID eventId, String title, String message, String channel) {
-        // Deterministic idempotency key: same reminder → same key → database enforces uniqueness
-        String idempotencyKey = "reminder:%s:%s".formatted(eventId, channel);
+    public void enqueue(UUID deliveryId, UUID userId, UUID eventId,
+                        String title, String message, String channel, Instant fireTime) {
+        // Deterministic idempotency key: one delivery → one outbox entry
+        String idempotencyKey = "reminder:" + deliveryId;
 
-        // Check if this exact reminder was already enqueued
+        // Dedup: if this delivery already has an outbox entry, skip
         Optional<NotificationOutbox> existing = outboxRepository.findByIdempotencyKey(idempotencyKey);
         if (existing.isPresent()) {
-            log.debug("Outbox entry already exists for {}", idempotencyKey);
+            log.debug("Outbox entry already exists for delivery {}", deliveryId);
             return;
         }
 
         NotificationOutbox outbox = new NotificationOutbox();
         outbox.setUserId(userId);
         outbox.setEventId(eventId);
+        outbox.setDeliveryId(deliveryId);
         outbox.setTitle(title);
         outbox.setMessage(message);
         outbox.setChannel(channel);
@@ -44,7 +46,7 @@ public class NotificationOutboxService {
         outbox.setStatus("pending");
         outbox.setAttemptCount(0);
         outbox.setMaxAttempts(3);
-        outbox.setScheduledAt(Instant.now());
+        outbox.setScheduledAt(fireTime); // Use actual fire time, not enqueue time
         outboxRepository.save(outbox);
     }
 }
