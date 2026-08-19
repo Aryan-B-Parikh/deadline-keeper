@@ -8,65 +8,63 @@
 | Maven | 3.8+ | Backend build tool |
 | Node.js | 20+ | Frontend runtime |
 | npm | 10+ | Frontend package manager |
+| Docker | Current | PostgreSQL/Testcontainers integration tests |
 
-## 1. Supabase Project
+## 1. Supabase
 
-1. Create a free account at [supabase.com](https://supabase.com).
-2. Create a new project — note the **Project URL** and **anon key** and **service_role key**.
-3. Go to **Authentication → Providers** and enable:
-   - **Email** (default, enabled)
-   - **Google** — create a Google Cloud OAuth 2.0 client, add the redirect URL:
-     `https://<your-project-ref>.supabase.co/auth/v1/callback`
-4. Go to **SQL Editor** and run the trigger function from `DATABASE.md` (Supabase Triggers section)
-   to auto-create `users` rows on signup.
-5. Note your **Database connection string** (Transaction pooler or Direct) from
-   **Settings → Database → Connection string**.
+1. Create a Supabase project.
+2. Enable **Email** and **Google** authentication as required by the frontend.
+3. Note the project URL and JWT secret.
+4. Configure the database connection values.
+5. Ensure the signup trigger creates the application's `users` row.
 
-## 2. Google Gemini API
+The backend does **not** require the Supabase service-role key.
 
-1. Go to [Google AI Studio](https://aistudio.google.com/) and generate an API key.
-2. The backend uses `gemini-2.5-flash` (or latest available vision model).
+## 2. Google Gemini
+
+1. Create an API key in Google AI Studio.
+2. Set `GEMINI_API_KEY` and optionally `GEMINI_MODEL`.
 
 ## 3. SendGrid
 
-1. Create an account at [sendgrid.com](https://sendgrid.com).
-2. Create an **API Key** with "Mail Send" and "Inbound Parse" permissions.
-3. Verify a sender identity (single sender or domain).
-4. For inbox parsing: configure **Inbound Parse** in SendGrid settings:
-   - Hostname: `deadlines.yourdomain.com` (or a SendGrid-provided test domain)
-   - URL: `http://localhost:8080/api/inbox/webhook` (use ngrok for local dev)
+1. Create a SendGrid account and API key with Mail Send and Inbound Parse permissions.
+2. Verify the sender identity used by DeadlineKeeper.
+3. Configure an Inbound Parse domain, for example `deadlines.yourdomain.com`.
+4. Configure SendGrid to POST inbound mail to:
+   `https://<backend-domain>/api/inbox/webhook`
+5. Users receive a unique forwarding address in the form:
+   `deadline+<user-token>@<inbox-parse-domain>`
+
+The recipient address carries the per-user forwarding token. The backend does not use a shared inbox webhook token or sender-email fallback for authentication.
+
+For local development, expose the backend with a tunnel such as ngrok and configure the HTTPS webhook URL in SendGrid.
 
 ## 4. Google Calendar API
 
-1. Go to [Google Cloud Console](https://console.cloud.google.com/).
-2. Create a new project (or reuse the one from Supabase Auth).
-3. Enable the **Google Calendar API**.
-4. Create an **OAuth 2.0 Client ID** (Web application type).
-5. Add authorized redirect URIs:
-   - `http://localhost:8080/api/calendar/sync/callback` (local dev)
-   - Your production callback URL
-6. Note the **Client ID** and **Client Secret**.
+1. Create or reuse a Google Cloud project.
+2. Enable the Google Calendar API.
+3. Create an OAuth 2.0 Web Application client.
+4. Add the callback URI:
+   `http://localhost:8080/api/calendar/sync/callback`
+5. Add the production callback URI when deploying.
 
 ## 5. Environment Variables
 
-Secrets are **not** stored in `application.yml` — they are read from environment
-variables (or the `deadline-keeper-backend/.env` file, which is loaded automatically
-by [spring-dotenv](https://github.com/paulschwarz/dotenv) and gitignored).
+Secrets are read from environment variables or the gitignored `deadline-keeper-backend/.env` file.
 
-Create `deadline-keeper-backend/.env` (copy from `.env.example`):
+Create `.env` from `.env.example`:
 
 ```env
 # Supabase
 SUPABASE_URL=https://<your-project-ref>.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=<your-service-role-key>
 SUPABASE_JWT_SECRET=<your-jwt-secret>
 
-# Database (Supabase Postgres direct connection)
-DATABASE_URL=jdbc:postgresql://db.<your-project-ref>.supabase.co:5432/postgres
+# Database
+DATABASE_URL=jdbc:postgresql://<your-project-ref>.supabase.co:5432/postgres?sslmode=require
 DATABASE_USERNAME=postgres
 DATABASE_PASSWORD=<your-db-password>
 
-# Google Gemini
+# Gemini
 GEMINI_API_KEY=<your-gemini-api-key>
 GEMINI_MODEL=gemini-2.5-flash
 
@@ -83,7 +81,37 @@ GOOGLE_CALENDAR_REDIRECT_URI=http://localhost:8080/api/calendar/sync/callback
 # App
 APP_BASE_URL=http://localhost:8080
 CORS_ALLOWED_ORIGINS=http://localhost:3000
+
+# Base64-encoded 256-bit AES key
+APP_ENCRYPTION_KEY=<base64-32-byte-key>
 ```
+
+For production, set the equivalent variables in the deployment environment and activate the `prod` or `production` Spring profile.
+
+## 6. Run the Backend
+
+```bash
+cd deadline-keeper-backend
+mvn spring-boot:run
+```
+
+Flyway applies migrations automatically. The backend listens on `http://localhost:8080`.
+
+Health check:
+
+```bash
+curl http://localhost:8080/api/health
+```
+
+## 7. Run the Frontend
+
+```bash
+cd deadline-keeper-frontend
+npm ci
+npm run dev
+```
+
+The frontend listens on `http://localhost:3000`.
 
 Create `deadline-keeper-frontend/.env.local`:
 
@@ -93,83 +121,59 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<your-anon-key>
 NEXT_PUBLIC_API_URL=http://localhost:8080
 ```
 
-## 6. Running the Backend
-
-```bash
-cd deadline-keeper-backend
-mvn spring-boot:run
-```
-
-The backend starts on `http://localhost:8080`. Flyway migrations run automatically
-on startup and create/update all database tables.
-
-To verify:
-```bash
-curl http://localhost:8080/api/health
-# Expected: {"status":"ok"}
-```
-
-## 7. Running the Frontend
-
-```bash
-cd deadline-keeper-frontend
-npm install
-npm run dev
-```
-
-The frontend starts on `http://localhost:3000`.
-
-## 8. Creating a Test User
+## 8. Test User
 
 1. Open `http://localhost:3000/register`.
-2. Sign up with an email and password.
-3. The Supabase Auth trigger creates a `users` row automatically.
-4. Log in — you'll be redirected to the dashboard.
+2. Register with Supabase Auth.
+3. Confirm the application `users` row is created.
+4. Sign in and open the dashboard.
+5. The Settings/profile area exposes the user's unique forwarding address.
 
-## 9. Local Development with ngrok (for webhooks)
+## 9. Verification
 
-SendGrid inbound parse and other webhooks need a public URL during local development:
+Backend:
 
 ```bash
-ngrok http 8080
+./mvnw clean verify
 ```
 
-Update your SendGrid inbound parse URL to the ngrok HTTPS URL:
-`https://<your-ngrok-id>.ngrok.io/api/inbox/webhook`
+Frontend:
 
-## 10. Project Structure Reference
-
+```bash
+npm ci
+npm run lint
+npm run build
 ```
-D:\Agent\
-├── deadline-keeper-backend/     # Spring Boot backend
+
+The backend integration suite uses PostgreSQL Testcontainers. Docker must be running for those tests.
+
+## 10. Project Structure
+
+```text
+├── deadline-keeper-backend/
 │   ├── src/main/java/com/deadlinekeeper/
-│   ├── src/main/resources/
-│   │   ├── application.yml
-│   │   └── db/migration/        # Flyway SQL migrations
+│   ├── src/main/resources/db/migration/
 │   ├── pom.xml
 │   └── Dockerfile
-├── deadline-keeper-frontend/    # Next.js frontend
-│   ├── src/app/                 # App Router pages
-│   ├── src/components/          # Reusable UI components
-│   ├── src/lib/                 # API client, Supabase client
-│   ├── package.json
-│   └── next.config.js
-├── docs/                        # This documentation
-│   ├── ARCHITECTURE.md
-│   ├── API.md
-│   ├── DATABASE.md
-│   └── SETUP.md
-└── deadline-assistant-master-prompt.md
+├── deadline-keeper-frontend/
+│   ├── src/app/
+│   ├── src/components/
+│   ├── src/lib/
+│   └── package.json
+├── docs/
+└── .github/workflows/ci.yml
 ```
 
 ## Troubleshooting
 
 | Problem | Fix |
 |---|---|
-| Flyway migration fails | Check `DATABASE_URL` and credentials; ensure the Supabase project is running |
-| JWT validation fails | Verify `SUPABASE_JWT_SECRET` matches your project's JWT secret (Settings → API → JWT settings). The backend auto-detects the format: base64-encoded legacy secrets, `sb_secret_`-prefixed secrets, and raw strings are all handled |
-| Backend starts with "Failed to configure a DataSource" | `DATABASE_URL` is empty — create `.env` from `.env.example` or set the env vars |
-| Gemini extraction returns empty | Check API key and quota at Google AI Studio |
-| SendGrid emails not sending | Verify sender identity; check API key permissions |
-| CORS errors in frontend | Ensure `CORS_ALLOWED_ORIGINS` includes your frontend URL |
-| Google Calendar OAuth fails | Check redirect URI matches exactly (no trailing slash) |
+| Flyway migration fails | Check database connectivity and credentials; inspect the first failing migration |
+| JWT validation fails | Verify `SUPABASE_URL` and `SUPABASE_JWT_SECRET` |
+| DataSource startup fails | Configure `DATABASE_URL`, username, and password |
+| Gemini extraction fails | Check Gemini API key and quota |
+| Email delivery fails | Verify SendGrid sender identity and Mail Send permission |
+| Inbound mail is rejected | Verify the recipient uses the user's generated `deadline+<token>@...` address and that the webhook receives the `to` field |
+| CORS errors | Set `CORS_ALLOWED_ORIGINS` to the exact frontend origin(s) |
+| Calendar OAuth fails | Verify the Google redirect URI exactly matches the configured callback |
+| Testcontainers fails | Start Docker Desktop and verify the Docker daemon is reachable |
