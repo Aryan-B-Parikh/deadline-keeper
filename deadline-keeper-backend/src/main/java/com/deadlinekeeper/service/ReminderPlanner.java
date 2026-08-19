@@ -27,18 +27,17 @@ public class ReminderPlanner {
     }
 
     @Transactional
-    public void syncFromSchedule(Event event, List<String> schedule) {
+    public void syncFromSchedule(Event event, List<com.deadlinekeeper.dto.ReminderRequest> schedule) {
         reminderRepository.findByEventId(event.getId())
                 .forEach(reminderRepository::delete);
 
-        if (schedule == null) return;
+        if (schedule == null || schedule.isEmpty()) return;
 
-        for (String offset : schedule) {
-            Duration duration = parseOffset(offset);
+        for (com.deadlinekeeper.dto.ReminderRequest req : schedule) {
             Reminder reminder = new Reminder();
             reminder.setEventId(event.getId());
-            reminder.setOffsetSeconds(duration.getSeconds());
-            reminder.setChannel("in_app");
+            reminder.setOffsetSeconds(req.getOffsetSeconds());
+            reminder.setChannel(req.getChannel());
             reminder.setEnabled(true);
             reminderRepository.save(reminder);
         }

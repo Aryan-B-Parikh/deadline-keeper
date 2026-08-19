@@ -31,8 +31,9 @@ public class EventRequest {
 
     private String timezone;
 
-    @Deprecated
-    private List<String> reminderSchedule;
+
+
+    private List<ReminderRequest> reminders;
 
     @Size(max = 5000, message = "Notes must be under 5000 characters")
     private String notes;

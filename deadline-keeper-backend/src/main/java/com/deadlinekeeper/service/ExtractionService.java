@@ -30,14 +30,17 @@ public class ExtractionService {
     private final EventRepository eventRepository;
     private final DeadlineStatusService deadlineStatusService;
     private final ReminderService reminderService;
+    private final com.deadlinekeeper.mapper.EventCompatibilityMapper eventCompatibilityMapper;
 
     public ExtractionService(GeminiClient geminiClient, EventRepository eventRepository,
                              DeadlineStatusService deadlineStatusService,
-                             ReminderService reminderService) {
+                             ReminderService reminderService,
+                             com.deadlinekeeper.mapper.EventCompatibilityMapper eventCompatibilityMapper) {
         this.geminiClient = geminiClient;
         this.eventRepository = eventRepository;
         this.deadlineStatusService = deadlineStatusService;
         this.reminderService = reminderService;
+        this.eventCompatibilityMapper = eventCompatibilityMapper;
     }
 
     public ExtractionResult extractFromText(String text) {
@@ -111,10 +114,10 @@ public class ExtractionService {
             event.setNotes(confirmed.getNotes());
 
             Event saved = eventRepository.save(event);
-            List<String> schedule = confirmed.getReminderSchedule() != null
-                    ? confirmed.getReminderSchedule() : List.of("7d", "1d", "2h");
-            reminderService.syncReminders(saved, schedule);
-            responses.add(toResponse(saved));
+            if (confirmed.getReminders() != null) {
+                reminderService.syncFromSchedule(saved, confirmed.getReminders());
+            }
+            responses.add(eventCompatibilityMapper.toResponse(saved));
         }
 
         return responses;
@@ -210,38 +213,4 @@ public class ExtractionService {
         }
     }
 
-    private EventResponse toResponse(Event event) {
-        ZoneId zone;
-        try {
-            zone = ZoneId.of(event.getTimezone());
-        } catch (Exception e) {
-            zone = ZoneOffset.UTC;
-        }
-
-        LocalDate dueDate = null;
-        LocalTime dueTime = null;
-        if (event.getDueAt() != null) {
-            var zoned = event.getDueAt().atZone(zone);
-            dueDate = zoned.toLocalDate();
-            dueTime = zoned.toLocalTime();
-        }
-
-        return EventResponse.builder()
-                .id(event.getId())
-                .title(event.getTitle())
-                .type(event.getType())
-                .dueAt(event.getDueAt())
-                .dueDate(dueDate)
-                .dueTime(dueTime)
-                .timezone(event.getTimezone())
-                .source(event.getSource())
-                .confidenceScore(event.getAiConfidence() != null ? event.getAiConfidence() : 1.0f)
-                .aiConfidence(event.getAiConfidence() != null ? event.getAiConfidence() : 1.0f)
-                .status(event.getStatus())
-                .notes(event.getNotes())
-                .sourceFileUrl(event.getSourceFileUrl())
-                .createdAt(event.getCreatedAt())
-                .updatedAt(event.getUpdatedAt())
-                .build();
-    }
 }

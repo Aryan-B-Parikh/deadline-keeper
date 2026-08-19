@@ -67,9 +67,9 @@ public class EventService {
         event.setNotes(request.getNotes());
 
         Event saved = eventRepository.save(event);
-        List<String> schedule = request.getReminderSchedule() != null
-                ? request.getReminderSchedule() : List.of("7d", "1d", "2h");
-        reminderService.syncReminders(saved, schedule);
+        if (request.getReminders() != null) {
+            reminderService.syncFromSchedule(saved, request.getReminders());
+        }
         return eventMapper.toResponse(saved);
     }
 
@@ -89,8 +89,8 @@ public class EventService {
         }
 
         Event saved = eventRepository.save(event);
-        if (request.getReminderSchedule() != null) {
-            reminderService.syncReminders(saved, request.getReminderSchedule());
+        if (request.getReminders() != null) {
+            reminderService.syncFromSchedule(saved, request.getReminders());
         }
         return eventMapper.toResponse(saved);
     }

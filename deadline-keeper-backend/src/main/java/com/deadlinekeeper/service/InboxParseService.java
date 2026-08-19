@@ -76,7 +76,11 @@ public class InboxParseService {
                     confirmed.setDueDate(e.getDueDate());
                     confirmed.setDueTime(e.getDueTime());
                     confirmed.setTimezone(e.getTimezone());
-                    confirmed.setReminderSchedule(List.of("7d", "1d", "2h"));
+                    confirmed.setReminders(List.of(
+                            new com.deadlinekeeper.dto.ReminderRequest(604800L, "email"), // 7d
+                            new com.deadlinekeeper.dto.ReminderRequest(86400L, "email"),  // 1d
+                            new com.deadlinekeeper.dto.ReminderRequest(7200L, "email")    // 2h
+                    ));
                     return confirmed;
                 })
                 .toList();

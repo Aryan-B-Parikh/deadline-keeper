@@ -67,7 +67,7 @@ public class ReminderService {
         }
     }
 
-    public void syncReminders(Event event, List<String> schedule) {
+    public void syncFromSchedule(Event event, List<com.deadlinekeeper.dto.ReminderRequest> schedule) {
         reminderPlanner.syncFromSchedule(event, schedule);
     }
 }

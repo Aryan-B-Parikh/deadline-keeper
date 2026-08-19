@@ -28,8 +28,8 @@ public class ExtractConfirmRequest {
         @Deprecated
         private LocalTime dueTime; // legacy
         private String timezone;
-        @Deprecated
-        private List<String> reminderSchedule;
+
+        private List<ReminderRequest> reminders;
         private String notes;
     }
 }

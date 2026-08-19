@@ -31,8 +31,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.when;
 
 @SpringBootTest
-@Testcontainers(disabledWithoutDocker = true)
-@org.junit.jupiter.api.condition.EnabledIf("isDockerAvailable")
+@Testcontainers
 @TestPropertySource(properties = {
         "spring.task.scheduling.pool.size=0",
         "outbox.lease-seconds=120",
@@ -40,14 +39,6 @@ import static org.mockito.Mockito.when;
         "outbox.retry-base-seconds=30"
 })
 class OutboxPostgresIntegrationTest {
-
-    static boolean isDockerAvailable() {
-        try {
-            return org.testcontainers.DockerClientFactory.instance().isDockerAvailable();
-        } catch (Throwable t) {
-            return false;
-        }
-    }
 
     @Container
     static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine")

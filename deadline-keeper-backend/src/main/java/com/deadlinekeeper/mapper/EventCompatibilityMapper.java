@@ -11,9 +11,20 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
+import com.deadlinekeeper.dto.ReminderResponse;
+import com.deadlinekeeper.repository.ReminderRepository;
+
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Component
 public class EventCompatibilityMapper {
+
+    private final ReminderRepository reminderRepository;
+
+    public EventCompatibilityMapper(ReminderRepository reminderRepository) {
+        this.reminderRepository = reminderRepository;
+    }
 
     public Instant resolveCanonicalDueAt(EventRequest request) {
         if (request.getDueAt() != null && request.getDueDate() != null) {
@@ -57,6 +68,11 @@ public class EventCompatibilityMapper {
             dueTime = zoned.toLocalTime();
         }
 
+        List<ReminderResponse> reminders = reminderRepository.findByEventId(event.getId())
+                .stream()
+                .map(r -> new ReminderResponse(r.getId(), r.getOffsetSeconds(), r.getChannel(), r.getEnabled()))
+                .collect(Collectors.toList());
+
         return EventResponse.builder()
                 .id(event.getId())
                 .title(event.getTitle())
@@ -69,6 +85,7 @@ public class EventCompatibilityMapper {
                 .confidenceScore(event.getAiConfidence() != null ? event.getAiConfidence() : 1.0f)
                 .aiConfidence(event.getAiConfidence() != null ? event.getAiConfidence() : 1.0f)
                 .status(event.getStatus())
+                .reminders(reminders)
                 .notes(event.getNotes())
                 .sourceFileUrl(event.getSourceFileUrl())
                 .createdAt(event.getCreatedAt())

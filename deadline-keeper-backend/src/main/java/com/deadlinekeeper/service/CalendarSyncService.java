@@ -303,7 +303,11 @@ public class CalendarSyncService {
         event.setStatus(statusService.computeStatus(dueAt));
         event.setNotes(googleEvent.getDescription());
         Event saved = eventRepository.save(event);
-        reminderService.syncReminders(saved, List.of("1d", "2h"));
+        List<com.deadlinekeeper.dto.ReminderRequest> defaultReminders = List.of(
+            new com.deadlinekeeper.dto.ReminderRequest(86400L, "in_app"),
+            new com.deadlinekeeper.dto.ReminderRequest(7200L, "in_app")
+        );
+        reminderService.syncFromSchedule(saved, defaultReminders);
 
         ExternalEvent extEvent = new ExternalEvent();
         extEvent.setDeadlineId(saved.getId());

@@ -26,8 +26,8 @@ public class EventResponse {
     private Float confidenceScore; // legacy
     private Float aiConfidence;
     private String status;
-    @Deprecated
-    private List<String> reminderSchedule;
+
+    private List<ReminderResponse> reminders;
     private String notes;
     private String sourceFileUrl;
     private Instant createdAt;
