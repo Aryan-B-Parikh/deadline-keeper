@@ -23,14 +23,13 @@ public interface EventRepository extends JpaRepository<Event, UUID> {
     @Query("SELECT e FROM Event e WHERE e.userId = :userId AND e.status IN :statuses ORDER BY e.dueAt ASC")
     List<Event> findByUserIdAndStatusIn(@Param("userId") UUID userId, @Param("statuses") List<String> statuses);
 
-    @Query("SELECT e FROM Event e WHERE e.status != 'done' AND e.dueAt <= :deadline")
+    @Query("SELECT e FROM Event e WHERE e.status NOT IN ('done', 'cancelled') AND e.dueAt <= :deadline")
     List<Event> findPendingBefore(@Param("deadline") Instant deadline);
 
     @Query("SELECT e FROM Event e WHERE e.status IN ('upcoming','due_soon','overdue') AND e.dueAt BETWEEN :from AND :to")
     List<Event> findActiveBetween(@Param("from") Instant from, @Param("to") Instant to);
 
-
-    @Query("SELECT e FROM Event e WHERE e.status IN ('upcoming', 'due_soon')")
+    @Query("SELECT e FROM Event e WHERE e.status IN ('upcoming', 'due_soon', 'overdue')")
     List<Event> findAllActiveEvents();
 
     @Query("SELECT e FROM Event e WHERE e.userId = :userId AND e.source = :source AND e.sourceReference = :sourceRef")
