@@ -234,7 +234,8 @@ public class CalendarSyncService {
         if (!isDeadlineWorthy(googleEvent)) return;
 
         String externalId = googleEvent.getId();
-        Optional<ExternalEvent> existing = externalEventRepository.findByProviderAndExternalId("google", externalId);
+        Optional<ExternalEvent> existing = externalEventRepository
+                .findByUserIdAndProviderAndExternalId(userId, "google", externalId);
         if (existing.isPresent()) {
             ExternalEvent ext = existing.get();
             Event event = eventRepository.findById(ext.getDeadlineId()).orElse(null);
@@ -283,6 +284,7 @@ public class CalendarSyncService {
 
         ExternalEvent extEvent = new ExternalEvent();
         extEvent.setDeadlineId(saved.getId());
+        extEvent.setUserId(userId);
         extEvent.setProvider("google");
         extEvent.setExternalId(externalId);
         extEvent.setEtag(googleEvent.getEtag());
@@ -291,7 +293,8 @@ public class CalendarSyncService {
     }
 
     private void handleDeletedEvent(UUID userId, String externalId) {
-        Optional<ExternalEvent> ext = externalEventRepository.findByProviderAndExternalId("google", externalId);
+        Optional<ExternalEvent> ext = externalEventRepository
+                .findByUserIdAndProviderAndExternalId(userId, "google", externalId);
         if (ext.isPresent()) {
             Event event = eventRepository.findById(ext.get().getDeadlineId()).orElse(null);
             if (event != null && event.getUserId().equals(userId)) {
