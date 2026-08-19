@@ -1,7 +1,19 @@
 -- DeadlineKeeper: Initial schema
 -- Depends on Supabase auth.users table existing
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 -- Users table (extends Supabase auth.users)
+CREATE SCHEMA IF NOT EXISTS auth;
+CREATE TABLE IF NOT EXISTS auth.users (
+    id UUID PRIMARY KEY,
+    email TEXT
+);
+CREATE OR REPLACE FUNCTION auth.uid() RETURNS UUID AS $$
+BEGIN
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
 CREATE TABLE users (
     id UUID PRIMARY KEY,
     email TEXT NOT NULL,
