@@ -39,12 +39,12 @@ public class EmailNotificationChannel implements NotificationChannel {
             request.setBody(mail.build());
             Response response = sendGrid.api(request);
             int status = response.getStatusCode();
+
+            if (status >= 200 && status < 300) return;
             if (status >= 400 && status < 500) {
                 throw new NotificationPermanentException("SendGrid rejected notification with status " + status);
             }
-            if (status >= 500) {
-                throw new RuntimeException("SendGrid returned transient status " + status);
-            }
+            throw new RuntimeException("SendGrid returned transient status " + status);
         } catch (NotificationPermanentException e) {
             throw e;
         } catch (IOException e) {
@@ -53,7 +53,9 @@ public class EmailNotificationChannel implements NotificationChannel {
     }
 
     @Override
-    public String getChannelName() { return "email"; }
+    public String getChannelName() {
+        return "email";
+    }
 
     private String buildHtmlContent(String title, String message) {
         return """
