@@ -13,5 +13,4 @@ public class SendGridConfig {
     private String apiKey;
     private String fromEmail;
     private String inboxParseDomain;
-    private String webhookSecret;
 }
