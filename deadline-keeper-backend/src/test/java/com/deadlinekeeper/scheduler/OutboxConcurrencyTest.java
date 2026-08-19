@@ -47,7 +47,6 @@ class OutboxConcurrencyTest {
         int totalJobs = 100;
         int workerCount = 5;
 
-        // Simulated in-memory queue partitioned atomically by claimPendingJobIds
         ConcurrentLinkedQueue<UUID> pendingQueue = new ConcurrentLinkedQueue<>();
         Map<UUID, NotificationOutbox> jobMap = new ConcurrentHashMap<>();
         User user = new User();
@@ -65,6 +64,7 @@ class OutboxConcurrencyTest {
             NotificationOutbox o = new NotificationOutbox();
             o.setId(id);
             o.setUserId(userId);
+            o.setEventId(UUID.randomUUID());
             o.setDeliveryId(deliveryId);
             o.setChannel("email");
             o.setStatus("processing");
@@ -75,12 +75,12 @@ class OutboxConcurrencyTest {
 
             ReminderDelivery d = new ReminderDelivery();
             d.setId(deliveryId);
+            d.setEventId(o.getEventId());
             d.setStatus("pending");
             d.setChannel("email");
             when(deliveryRepository.findById(deliveryId)).thenReturn(Optional.of(d));
         }
 
-        // Mock claimPendingJobIds to atomically poll from the queue in batches
         when(outboxRepository.claimPendingJobIds(anyInt(), anyLong())).thenAnswer(invocation -> {
             int limit = invocation.getArgument(0);
             List<UUID> claimed = new ArrayList<>();
@@ -96,9 +96,7 @@ class OutboxConcurrencyTest {
             Iterable<UUID> ids = invocation.getArgument(0);
             List<NotificationOutbox> list = new ArrayList<>();
             for (UUID id : ids) {
-                if (jobMap.containsKey(id)) {
-                    list.add(jobMap.get(id));
-                }
+                if (jobMap.containsKey(id)) list.add(jobMap.get(id));
             }
             return list;
         });
@@ -111,12 +109,10 @@ class OutboxConcurrencyTest {
         doAnswer(invocation -> {
             String key = invocation.getArgument(3);
             boolean isNew = processedKeys.add(key);
-            if (!isNew) {
-                throw new IllegalStateException("Duplicate send detected for key: " + key);
-            }
+            if (!isNew) throw new IllegalStateException("Duplicate send detected for key: " + key);
             totalSends.incrementAndGet();
             return null;
-        }).when(emailChannel).send(any(), any(), any(), any());
+        }).when(emailChannel).send(any(), any(), any(), any(), any());
 
         ExecutorService executor = Executors.newFixedThreadPool(workerCount);
         CountDownLatch startLatch = new CountDownLatch(1);
@@ -127,11 +123,9 @@ class OutboxConcurrencyTest {
                 try {
                     startLatch.await();
                     NotificationOutboxProcessor workerProcessor = new NotificationOutboxProcessor(
-                            outboxRepository, writer, deliveryRepository, userRepository, List.of(emailChannel), new OutboxRetryPolicy(30, 600), 120, 50);
-
-                    while (!pendingQueue.isEmpty()) {
-                        workerProcessor.processPending();
-                    }
+                            outboxRepository, writer, deliveryRepository, userRepository,
+                            List.of(emailChannel), new OutboxRetryPolicy(30, 600), 120, 50);
+                    while (!pendingQueue.isEmpty()) workerProcessor.processPending();
                 } catch (Exception e) {
                     throw new RuntimeException(e);
                 } finally {
