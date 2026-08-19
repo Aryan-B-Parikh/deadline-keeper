@@ -28,6 +28,7 @@ import java.security.spec.ECGenParameterSpec;
 import java.security.spec.ECPublicKeySpec;
 import java.security.spec.ECParameterSpec;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Component
 public class SupabaseJwtAuthenticationFilter extends OncePerRequestFilter {
@@ -37,12 +38,10 @@ public class SupabaseJwtAuthenticationFilter extends OncePerRequestFilter {
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final RestTemplate restTemplate = new RestTemplate();
 
-    private volatile String cachedKid = null;
-    private volatile PublicKey cachedPublicKey = null;
+    private final Map<String, PublicKey> keyCache = new ConcurrentHashMap<>();
     private volatile long cacheExpiry = 0;
 
     private static final long CACHE_TTL_MS = 3600000;
-
     private static final String JWKS_URL_TEMPLATE = "%s/auth/v1/.well-known/jwks.json";
 
     public SupabaseJwtAuthenticationFilter(SupabaseConfig supabaseConfig) {
@@ -82,34 +81,51 @@ public class SupabaseJwtAuthenticationFilter extends OncePerRequestFilter {
 
     private Claims verifyAndParse(String token) throws Exception {
         String[] parts = token.split("\\.");
-        if (parts.length < 2) throw new IllegalArgumentException("Invalid JWT");
+        if (parts.length != 3) throw new IllegalArgumentException("Invalid JWT: expected 3 parts");
 
-        JsonNode header = objectMapper.readTree(
-                new String(Base64.getUrlDecoder().decode(parts[0] + "====".substring(0, (4 - parts[0].length() % 4) % 4)), StandardCharsets.UTF_8));
-
+        JsonNode header = parseBase64Json(parts[0]);
         String alg = header.has("alg") ? header.get("alg").asText() : null;
         String kid = header.has("kid") ? header.get("kid").asText() : null;
-        log.info("JWT alg={}, kid={}", alg, kid);
 
-        if ("ES256".equals(alg) && kid != null) {
-            PublicKey publicKey = getECPublicKey(kid);
-            if (publicKey != null) {
-                log.info("Using EC public key for kid={}", kid);
-                return Jwts.parser()
-                        .verifyWith(publicKey)
-                        .build()
-                        .parseSignedClaims(token)
-                        .getPayload();
-            }
-            log.warn("No EC public key found for kid={}", kid);
+        if (!"ES256".equals(alg) && !"HS256".equals(alg)) {
+            throw new SecurityException("Unsupported JWT algorithm: " + alg);
         }
 
-        return verifyWithHMAC(token);
+        if ("ES256".equals(alg)) {
+            if (kid == null) throw new SecurityException("ES256 token missing kid header");
+            PublicKey publicKey = getECPublicKey(kid);
+            if (publicKey == null) throw new SecurityException("No public key found for kid: " + kid);
+
+            Claims claims = Jwts.parser()
+                    .verifyWith(publicKey)
+                    .build()
+                    .parseSignedClaims(token)
+                    .getPayload();
+
+            validateClaims(claims);
+            return claims;
+        }
+
+        Claims claims = verifyWithHMAC(token);
+        validateClaims(claims);
+        return claims;
+    }
+
+    private void validateClaims(Claims claims) {
+        String issuer = claims.getIssuer();
+        String expectedIssuer = supabaseConfig.getUrl() + "/auth/v1";
+        if (issuer != null && !issuer.equals(expectedIssuer)) {
+            throw new SecurityException("Invalid JWT issuer: " + issuer);
+        }
+
+        if (claims.getExpiration() != null && claims.getExpiration().before(new Date())) {
+            throw new SecurityException("JWT has expired");
+        }
     }
 
     private PublicKey getECPublicKey(String kid) throws Exception {
-        if (kid.equals(cachedKid) && cachedPublicKey != null && System.currentTimeMillis() < cacheExpiry) {
-            return cachedPublicKey;
+        if (System.currentTimeMillis() < cacheExpiry && keyCache.containsKey(kid)) {
+            return keyCache.get(kid);
         }
 
         String url = JWKS_URL_TEMPLATE.formatted(supabaseConfig.getUrl());
@@ -117,9 +133,12 @@ public class SupabaseJwtAuthenticationFilter extends OncePerRequestFilter {
         if (jwks == null || !jwks.has("keys")) return null;
 
         for (JsonNode keyNode : jwks.get("keys")) {
-            if (kid.equals(keyNode.get("kid").asText()) && "EC".equals(keyNode.get("kty").asText())) {
-                byte[] xBytes = Base64.getUrlDecoder().decode(keyNode.get("x").asText() + "====".substring(0, (4 - keyNode.get("x").asText().length() % 4) % 4));
-                byte[] yBytes = Base64.getUrlDecoder().decode(keyNode.get("y").asText() + "====".substring(0, (4 - keyNode.get("y").asText().length() % 4) % 4));
+            String k = keyNode.get("kid").asText();
+            if ("EC".equals(keyNode.get("kty").asText())) {
+                byte[] xBytes = Base64.getUrlDecoder().decode(
+                        keyNode.get("x").asText() + "====".substring(0, (4 - keyNode.get("x").asText().length() % 4) % 4));
+                byte[] yBytes = Base64.getUrlDecoder().decode(
+                        keyNode.get("y").asText() + "====".substring(0, (4 - keyNode.get("y").asText().length() % 4) % 4));
 
                 BigInteger x = new BigInteger(1, xBytes);
                 BigInteger y = new BigInteger(1, yBytes);
@@ -129,17 +148,15 @@ public class SupabaseJwtAuthenticationFilter extends OncePerRequestFilter {
                 ECParameterSpec ecParameters = params.getParameterSpec(ECParameterSpec.class);
 
                 ECPublicKeySpec pubKeySpec = new ECPublicKeySpec(new java.security.spec.ECPoint(x, y), ecParameters);
-
                 KeyFactory kf = KeyFactory.getInstance("EC");
                 PublicKey pk = kf.generatePublic(pubKeySpec);
 
-                cachedKid = kid;
-                cachedPublicKey = pk;
-                cacheExpiry = System.currentTimeMillis() + CACHE_TTL_MS;
-                return pk;
+                keyCache.put(k, pk);
             }
         }
-        return null;
+
+        cacheExpiry = System.currentTimeMillis() + CACHE_TTL_MS;
+        return keyCache.get(kid);
     }
 
     private Claims verifyWithHMAC(String token) throws Exception {
@@ -150,6 +167,12 @@ public class SupabaseJwtAuthenticationFilter extends OncePerRequestFilter {
                 .build()
                 .parseSignedClaims(token)
                 .getPayload();
+    }
+
+    private JsonNode parseBase64Json(String base64) throws IOException {
+        String padded = base64 + "====".substring(0, (4 - base64.length() % 4) % 4);
+        byte[] decoded = Base64.getUrlDecoder().decode(padded);
+        return objectMapper.readTree(new String(decoded, StandardCharsets.UTF_8));
     }
 
     private static byte[] decodeJwtSecret(String secret) {

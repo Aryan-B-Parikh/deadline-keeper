@@ -31,10 +31,7 @@ public class InboxParseService {
 
     public List<EventResponse> processInboundEmail(String fromEmail, String subject,
                                                     String textBody, String htmlBody) {
-        User user = userRepository.findAll().stream()
-                .filter(u -> u.getEmail().equalsIgnoreCase(fromEmail))
-                .findFirst()
-                .orElse(null);
+        User user = userRepository.findByEmailIgnoreCase(fromEmail).orElse(null);
 
         if (user == null) {
             log.warn("Received inbox email from unknown sender: {}", fromEmail);
@@ -55,11 +52,20 @@ public class InboxParseService {
             return List.of();
         }
 
+        List<ExtractionResult.ExtractedEvent> highConfidenceEvents = result.getEvents().stream()
+                .filter(e -> e.getConfidenceScore() >= 0.7f)
+                .toList();
+
+        if (highConfidenceEvents.isEmpty()) {
+            log.warn("All extracted events below confidence threshold (0.7) from: {}", fromEmail);
+            return List.of();
+        }
+
         ExtractConfirmRequest confirmRequest = new ExtractConfirmRequest();
         confirmRequest.setSourceType("email");
         confirmRequest.setSourceReference("Email from %s: %s".formatted(fromEmail, subject));
 
-        List<ExtractConfirmRequest.ConfirmedEvent> confirmedEvents = result.getEvents().stream()
+        List<ExtractConfirmRequest.ConfirmedEvent> confirmedEvents = highConfidenceEvents.stream()
                 .filter(e -> e.getDueDate() != null)
                 .map(e -> {
                     ExtractConfirmRequest.ConfirmedEvent confirmed = new ExtractConfirmRequest.ConfirmedEvent();

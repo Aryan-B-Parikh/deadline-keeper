@@ -39,6 +39,7 @@ supabase:
   url: ${SUPABASE_URL:}
   jwt-secret: ${SUPABASE_JWT_SECRET:}
   service-role-key: ${SUPABASE_SERVICE_ROLE_KEY:}
+  webhook-secret: ${SUPABASE_WEBHOOK_SECRET:}
 
 # Google Gemini
 gemini:
@@ -50,6 +51,7 @@ sendgrid:
   api-key: ${SENDGRID_API_KEY:}
   from-email: ${SENDGRID_FROM_EMAIL:}
   inbox-parse-domain: ${SENDGRID_INBOX_PARSE_DOMAIN:}
+  webhook-secret: ${SENDGRID_WEBHOOK_SECRET:}
 
 # Google Calendar
 google:

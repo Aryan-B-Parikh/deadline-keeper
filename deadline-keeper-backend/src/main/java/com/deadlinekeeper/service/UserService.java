@@ -2,6 +2,7 @@ package com.deadlinekeeper.service;
 
 import com.deadlinekeeper.dto.UserProfileResponse;
 import com.deadlinekeeper.dto.UserProfileUpdateRequest;
+import com.deadlinekeeper.exception.ResourceNotFoundException;
 import com.deadlinekeeper.model.User;
 import com.deadlinekeeper.repository.UserRepository;
 import org.springframework.stereotype.Service;
@@ -19,13 +20,13 @@ public class UserService {
 
     public UserProfileResponse getProfile(UUID userId) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("User", userId.toString()));
         return toResponse(user);
     }
 
     public UserProfileResponse updateProfile(UUID userId, UserProfileUpdateRequest request) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("User", userId.toString()));
 
         if (request.getDisplayName() != null) user.setDisplayName(request.getDisplayName());
         if (request.getTimezone() != null) user.setTimezone(request.getTimezone());

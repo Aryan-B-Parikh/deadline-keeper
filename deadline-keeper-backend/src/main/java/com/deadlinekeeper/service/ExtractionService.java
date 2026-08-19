@@ -3,6 +3,8 @@ package com.deadlinekeeper.service;
 import com.deadlinekeeper.dto.ExtractConfirmRequest;
 import com.deadlinekeeper.dto.EventResponse;
 import com.deadlinekeeper.dto.ExtractionResult;
+import com.deadlinekeeper.exception.ExternalServiceException;
+import com.deadlinekeeper.exception.ValidationException;
 import com.deadlinekeeper.integration.GeminiClient;
 import com.deadlinekeeper.model.Event;
 import com.deadlinekeeper.repository.EventRepository;
@@ -10,8 +12,12 @@ import com.fasterxml.jackson.databind.JsonNode;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
@@ -22,10 +28,16 @@ public class ExtractionService {
 
     private final GeminiClient geminiClient;
     private final EventRepository eventRepository;
+    private final DeadlineStatusService deadlineStatusService;
+    private final ReminderService reminderService;
 
-    public ExtractionService(GeminiClient geminiClient, EventRepository eventRepository) {
+    public ExtractionService(GeminiClient geminiClient, EventRepository eventRepository,
+                             DeadlineStatusService deadlineStatusService,
+                             ReminderService reminderService) {
         this.geminiClient = geminiClient;
         this.eventRepository = eventRepository;
+        this.deadlineStatusService = deadlineStatusService;
+        this.reminderService = reminderService;
     }
 
     public ExtractionResult extractFromText(String text) {
@@ -39,8 +51,10 @@ public class ExtractionService {
             String mimeType = file.getContentType() != null ? file.getContentType() : "image/png";
             JsonNode result = geminiClient.extractFromImage(imageData, mimeType);
             return parseExtractionResult(result);
+        } catch (ExternalServiceException e) {
+            throw e;
         } catch (Exception e) {
-            throw new RuntimeException("Failed to read uploaded image: " + e.getMessage(), e);
+            throw new ExternalServiceException("Gemini", "Failed to read uploaded image: " + e.getMessage(), e);
         }
     }
 
@@ -48,23 +62,48 @@ public class ExtractionService {
         List<EventResponse> responses = new ArrayList<>();
 
         for (ExtractConfirmRequest.ConfirmedEvent confirmed : request.getEvents()) {
+            if (confirmed.getTitle() == null || confirmed.getTitle().isBlank()) {
+                throw new ValidationException("Event title is required");
+            }
+            if (confirmed.getDueDate() == null) {
+                throw new ValidationException("Due date is required for event: " + confirmed.getTitle());
+            }
+
+            String tz = confirmed.getTimezone() != null ? confirmed.getTimezone() : "UTC";
+            ZoneId zone;
+            try {
+                zone = ZoneId.of(tz);
+            } catch (Exception e) {
+                zone = ZoneOffset.UTC;
+                tz = "UTC";
+            }
+
+            LocalTime time = confirmed.getDueTime() != null ? confirmed.getDueTime() : LocalTime.of(23, 59);
+            Instant dueAt = LocalDateTime.of(confirmed.getDueDate(), time)
+                    .atZone(zone).toInstant();
+
             Event event = new Event();
             event.setUserId(userId);
             event.setTitle(confirmed.getTitle());
-            event.setType(confirmed.getType());
+            event.setType(confirmed.getType() != null ? confirmed.getType() : "other");
+            event.setDueAt(dueAt);
             event.setDueDate(confirmed.getDueDate());
             event.setDueTime(confirmed.getDueTime());
-            event.setTimezone(confirmed.getTimezone() != null ? confirmed.getTimezone() : "UTC");
+            event.setTimezone(tz);
             event.setSource(request.getSourceType() != null ? request.getSourceType() : "pasted_text");
             event.setSourceReference(request.getSourceReference());
             event.setSourceFileUrl(request.getSourceFileUrl());
+            event.setAiConfidence(1.0f);
             event.setConfidenceScore(1.0f);
-            event.setStatus(computeStatus(confirmed.getDueDate(), confirmed.getDueTime()));
+            event.setConfirmationStatus("user_confirmed");
+            event.setUserConfirmed(true);
+            event.setStatus(deadlineStatusService.computeStatus(dueAt));
             event.setReminderSchedule(confirmed.getReminderSchedule() != null
                     ? confirmed.getReminderSchedule() : List.of("7d", "1d", "2h"));
             event.setNotes(confirmed.getNotes());
 
             Event saved = eventRepository.save(event);
+            reminderService.syncReminders(saved, saved.getReminderSchedule());
             responses.add(toResponse(saved));
         }
 
@@ -94,6 +133,11 @@ public class ExtractionService {
                         .needsClarification(eventNode.has("needs_clarification")
                                 && eventNode.get("needs_clarification").asBoolean())
                         .build();
+
+                // Skip events with no date — they can't be deadlines
+                if (extracted.getDueDate() == null) {
+                    continue;
+                }
 
                 if (extracted.isNeedsClarification() || extracted.getConfidenceScore() < 0.7f) {
                     needsConfirmation = true;
@@ -136,18 +180,6 @@ public class ExtractionService {
         } catch (Exception e) {
             return null;
         }
-    }
-
-    private String computeStatus(LocalDate dueDate, LocalTime dueTime) {
-        if (dueDate == null) return "upcoming";
-        java.time.LocalDateTime now = java.time.LocalDateTime.now();
-        java.time.LocalDateTime due = dueTime != null
-                ? java.time.LocalDateTime.of(dueDate, dueTime)
-                : java.time.LocalDateTime.of(dueDate, LocalTime.MAX);
-
-        if (due.isBefore(now)) return "overdue";
-        if (due.minusDays(3).isBefore(now)) return "due_soon";
-        return "upcoming";
     }
 
     private EventResponse toResponse(Event event) {

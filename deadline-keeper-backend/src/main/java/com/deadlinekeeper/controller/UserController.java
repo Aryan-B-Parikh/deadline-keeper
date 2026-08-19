@@ -2,6 +2,7 @@ package com.deadlinekeeper.controller;
 
 import com.deadlinekeeper.dto.UserProfileResponse;
 import com.deadlinekeeper.dto.UserProfileUpdateRequest;
+import com.deadlinekeeper.exception.ResourceNotFoundException;
 import com.deadlinekeeper.security.SecurityUtils;
 import com.deadlinekeeper.service.UserService;
 import org.springframework.http.ResponseEntity;
@@ -22,6 +23,9 @@ public class UserController {
     @GetMapping("/profile")
     public ResponseEntity<UserProfileResponse> getProfile() {
         UUID userId = SecurityUtils.getCurrentUserId();
+        if (userId == null) {
+            throw new ResourceNotFoundException("User", "current");
+        }
         return ResponseEntity.ok(userService.getProfile(userId));
     }
 
@@ -29,6 +33,9 @@ public class UserController {
     public ResponseEntity<UserProfileResponse> updateProfile(
             @RequestBody UserProfileUpdateRequest request) {
         UUID userId = SecurityUtils.getCurrentUserId();
+        if (userId == null) {
+            throw new ResourceNotFoundException("User", "current");
+        }
         return ResponseEntity.ok(userService.updateProfile(userId, request));
     }
 }

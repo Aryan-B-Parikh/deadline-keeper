@@ -1,117 +1,159 @@
 package com.deadlinekeeper.service;
 
 import com.deadlinekeeper.model.Event;
-import com.deadlinekeeper.model.ReminderLog;
+import com.deadlinekeeper.model.NotificationOutbox;
+import com.deadlinekeeper.model.Reminder;
+import com.deadlinekeeper.model.ReminderDelivery;
 import com.deadlinekeeper.model.User;
 import com.deadlinekeeper.repository.EventRepository;
-import com.deadlinekeeper.repository.ReminderLogRepository;
+import com.deadlinekeeper.repository.NotificationOutboxRepository;
+import com.deadlinekeeper.repository.ReminderDeliveryRepository;
+import com.deadlinekeeper.repository.ReminderRepository;
 import com.deadlinekeeper.repository.UserRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.LocalTime;
-import java.time.ZoneOffset;
-import java.time.ZonedDateTime;
+import java.time.Instant;
 import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.UUID;
 
 @Service
 public class ReminderService {
 
+    private static final Logger log = LoggerFactory.getLogger(ReminderService.class);
+    private static final long MAX_REMINDER_OFFSET_SECONDS = 7 * 86400;
+
     private final EventRepository eventRepository;
-    private final ReminderLogRepository reminderLogRepository;
+    private final ReminderRepository reminderRepository;
+    private final ReminderDeliveryRepository deliveryRepository;
+    private final NotificationOutboxRepository outboxRepository;
     private final UserRepository userRepository;
-    private final NotificationService notificationService;
+    private final DeadlineStatusService statusService;
 
     public ReminderService(EventRepository eventRepository,
-                           ReminderLogRepository reminderLogRepository,
+                           ReminderRepository reminderRepository,
+                           ReminderDeliveryRepository deliveryRepository,
+                           NotificationOutboxRepository outboxRepository,
                            UserRepository userRepository,
-                           NotificationService notificationService) {
+                           DeadlineStatusService statusService) {
         this.eventRepository = eventRepository;
-        this.reminderLogRepository = reminderLogRepository;
+        this.reminderRepository = reminderRepository;
+        this.deliveryRepository = deliveryRepository;
+        this.outboxRepository = outboxRepository;
         this.userRepository = userRepository;
-        this.notificationService = notificationService;
+        this.statusService = statusService;
     }
 
+    @Transactional
     public void processReminders() {
-        List<Event> activeEvents = eventRepository.findAllActiveEvents();
+        Instant now = Instant.now();
+        Instant windowEnd = now.plusSeconds(MAX_REMINDER_OFFSET_SECONDS);
 
-        for (Event event : activeEvents) {
-            User user = userRepository.findById(event.getUserId()).orElse(null);
-            if (user == null) continue;
+        List<Event> activeEvents = eventRepository.findActiveBetween(now, windowEnd);
+        List<Event> overdueEvents = eventRepository.findPendingBefore(now);
 
-            ZonedDateTime dueDateTime = getDueDateTime(event);
-            ZonedDateTime now = ZonedDateTime.now(ZoneOffset.UTC);
+        Set<UUID> processedEventIds = new HashSet<>();
+        List<Event> allEvents = new ArrayList<>();
+        allEvents.addAll(activeEvents);
+        allEvents.addAll(overdueEvents);
 
-            updateEventStatus(event, now, dueDateTime);
+        for (Event event : allEvents) {
+            if (processedEventIds.contains(event.getId())) continue;
+            processedEventIds.add(event.getId());
 
-            if (event.getReminderSchedule() == null) continue;
+            String newStatus = statusService.computeStatus(event.getDueAt(), event.getStatus());
+            if (!newStatus.equals(event.getStatus())) {
+                event.setStatus(newStatus);
+                eventRepository.save(event);
+            }
 
-            for (String offset : event.getReminderSchedule()) {
-                if (reminderLogRepository.existsByEventIdAndOffsetFired(event.getId(), offset)) {
-                    continue;
-                }
+            if ("done".equals(event.getStatus())) continue;
 
-                Duration offsetDuration = parseOffset(offset);
-                ZonedDateTime fireTime = dueDateTime.minus(offsetDuration);
+            List<Reminder> reminders = reminderRepository.findByEventId(event.getId());
 
-                if (!now.isBefore(fireTime)) {
-                    fireReminder(user, event, offset, offsetDuration);
+            for (Reminder reminder : reminders) {
+                if (!reminder.getEnabled()) continue;
 
-                    ReminderLog log = new ReminderLog();
-                    log.setEventId(event.getId());
-                    log.setOffsetFired(offset);
-                    reminderLogRepository.save(log);
-                }
+                Instant fireTime = event.getDueAt().minusSeconds(reminder.getOffsetSeconds());
+
+                if (fireTime.isAfter(now)) continue;
+
+                boolean alreadyDelivered = deliveryRepository.existsByEventIdAndReminderIdAndChannel(
+                        event.getId(), reminder.getId(), reminder.getChannel());
+
+                if (alreadyDelivered) continue;
+
+                ReminderDelivery delivery = new ReminderDelivery();
+                delivery.setEventId(event.getId());
+                delivery.setReminderId(reminder.getId());
+                delivery.setScheduledAt(fireTime);
+                delivery.setChannel(reminder.getChannel());
+                delivery.setStatus("pending");
+                delivery.setAttemptCount(0);
+                deliveryRepository.save(delivery);
+
+                User user = userRepository.findById(event.getUserId()).orElse(null);
+                if (user == null) continue;
+
+                String idempotencyKey = "reminder_%s_%s_%s".formatted(
+                        event.getId(), reminder.getId(), reminder.getChannel());
+
+                if (outboxRepository.findByIdempotencyKey(idempotencyKey).isPresent()) continue;
+
+                String timeDesc = formatDuration(Duration.ofSeconds(reminder.getOffsetSeconds()));
+                String title = "⏰ Deadline Reminder: " + event.getTitle();
+                String message = "Your deadline for \"%s\" is in %s (due: %s).".formatted(
+                        event.getTitle(), timeDesc,
+                        event.getDueAt().atZone(ZoneId.of(event.getTimezone()))
+                                .format(DateTimeFormatter.ofPattern("MMM d, yyyy HH:mm")));
+
+                NotificationOutbox outbox = new NotificationOutbox();
+                outbox.setUserId(user.getId());
+                outbox.setEventId(event.getId());
+                outbox.setTitle(title);
+                outbox.setMessage(message);
+                outbox.setChannel(reminder.getChannel());
+                outbox.setIdempotencyKey(idempotencyKey);
+                outbox.setStatus("pending");
+                outbox.setAttemptCount(0);
+                outbox.setMaxAttempts(3);
+                outbox.setScheduledAt(Instant.now());
+                outboxRepository.save(outbox);
+
+                delivery.setStatus("sent");
+                delivery.setSentAt(Instant.now());
+                deliveryRepository.save(delivery);
             }
         }
     }
 
-    private void updateEventStatus(Event event, ZonedDateTime now, ZonedDateTime dueDateTime) {
-        String newStatus;
-        if (now.isAfter(dueDateTime)) {
-            newStatus = "overdue";
-        } else if (now.isAfter(dueDateTime.minusDays(3))) {
-            newStatus = "due_soon";
-        } else {
-            newStatus = "upcoming";
-        }
+    @Transactional
+    public void syncReminders(Event event, List<String> schedule) {
+        reminderRepository.findByEventId(event.getId())
+                .forEach(reminderRepository::delete);
 
-        if (!event.getStatus().equals(newStatus) && !event.getStatus().equals("done")) {
-            event.setStatus(newStatus);
-            eventRepository.save(event);
+        if (schedule == null) return;
+
+        for (String offset : schedule) {
+            Duration duration = parseDuration(offset);
+            Reminder reminder = new Reminder();
+            reminder.setEventId(event.getId());
+            reminder.setOffsetSeconds(duration.getSeconds());
+            reminder.setChannel("in_app");
+            reminder.setEnabled(true);
+            reminderRepository.save(reminder);
         }
     }
 
-    private void fireReminder(User user, Event event, String offset, Duration offsetDuration) {
-        String timeDescription = formatDuration(offsetDuration);
-        String title = "⏰ Deadline Reminder: " + event.getTitle();
-        String message = "Your deadline for \"%s\" is in %s (due: %s%s).".formatted(
-                event.getTitle(),
-                timeDescription,
-                event.getDueDate().toString(),
-                event.getDueTime() != null ? " at " + event.getDueTime() : ""
-        );
-
-        notificationService.send(user, title, message, event.getId());
-    }
-
-    private ZonedDateTime getDueDateTime(Event event) {
-        ZoneId zone;
-        try {
-            zone = ZoneId.of(event.getTimezone());
-        } catch (Exception e) {
-            zone = ZoneOffset.UTC;
-        }
-
-        LocalTime time = event.getDueTime() != null ? event.getDueTime() : LocalTime.of(23, 59);
-        LocalDateTime localDateTime = LocalDateTime.of(event.getDueDate(), time);
-        return localDateTime.atZone(zone);
-    }
-
-    private Duration parseOffset(String offset) {
+    private Duration parseDuration(String offset) {
         if (offset.endsWith("d")) {
             return Duration.ofDays(Long.parseLong(offset.replace("d", "")));
         } else if (offset.endsWith("h")) {

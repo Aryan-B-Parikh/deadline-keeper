@@ -2,14 +2,16 @@ package com.deadlinekeeper.service;
 
 import com.deadlinekeeper.dto.EventRequest;
 import com.deadlinekeeper.dto.EventResponse;
+import com.deadlinekeeper.exception.ResourceNotFoundException;
 import com.deadlinekeeper.model.Event;
 import com.deadlinekeeper.repository.EventRepository;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.UUID;
 
@@ -17,9 +19,15 @@ import java.util.UUID;
 public class EventService {
 
     private final EventRepository eventRepository;
+    private final DeadlineStatusService deadlineStatusService;
+    private final ReminderService reminderService;
 
-    public EventService(EventRepository eventRepository) {
+    public EventService(EventRepository eventRepository,
+                        DeadlineStatusService deadlineStatusService,
+                        ReminderService reminderService) {
         this.eventRepository = eventRepository;
+        this.deadlineStatusService = deadlineStatusService;
+        this.reminderService = reminderService;
     }
 
     public List<EventResponse> getUserEvents(UUID userId, String status) {
@@ -33,11 +41,8 @@ public class EventService {
     }
 
     public EventResponse getEvent(UUID userId, UUID eventId) {
-        Event event = eventRepository.findById(eventId)
-                .orElseThrow(() -> new RuntimeException("Event not found"));
-        if (!event.getUserId().equals(userId)) {
-            throw new RuntimeException("Access denied");
-        }
+        Event event = eventRepository.findByIdAndUserId(eventId, userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Event", eventId.toString()));
         return toResponse(event);
     }
 
@@ -48,22 +53,26 @@ public class EventService {
         event.setType(request.getType());
         event.setDueDate(request.getDueDate());
         event.setDueTime(request.getDueTime());
-        event.setTimezone(request.getTimezone() != null ? request.getTimezone() : "UTC");
+
+        String timezone = request.getTimezone() != null ? request.getTimezone() : "UTC";
+        event.setTimezone(timezone);
+        event.setDueAt(computeDueAt(request.getDueDate(), request.getDueTime(), timezone));
+
         event.setSource("manual");
         event.setConfidenceScore(1.0f);
-        event.setStatus(computeStatus(request.getDueDate(), request.getDueTime()));
+        event.setStatus(deadlineStatusService.computeStatus(event.getDueAt()));
         event.setReminderSchedule(request.getReminderSchedule() != null
                 ? request.getReminderSchedule() : List.of("7d", "1d", "2h"));
         event.setNotes(request.getNotes());
-        return toResponse(eventRepository.save(event));
+
+        Event saved = eventRepository.save(event);
+        reminderService.syncReminders(saved, saved.getReminderSchedule());
+        return toResponse(saved);
     }
 
     public EventResponse updateEvent(UUID userId, UUID eventId, EventRequest request) {
-        Event event = eventRepository.findById(eventId)
-                .orElseThrow(() -> new RuntimeException("Event not found"));
-        if (!event.getUserId().equals(userId)) {
-            throw new RuntimeException("Access denied");
-        }
+        Event event = eventRepository.findByIdAndUserId(eventId, userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Event", eventId.toString()));
 
         event.setTitle(request.getTitle());
         event.setType(request.getType());
@@ -73,58 +82,58 @@ public class EventService {
         if (request.getReminderSchedule() != null) event.setReminderSchedule(request.getReminderSchedule());
         event.setNotes(request.getNotes());
 
+        event.setDueAt(computeDueAt(request.getDueDate(), request.getDueTime(), event.getTimezone()));
+
         if (!event.getStatus().equals("done")) {
-            event.setStatus(computeStatus(request.getDueDate(), request.getDueTime()));
+            event.setStatus(deadlineStatusService.computeStatus(event.getDueAt(), event.getStatus()));
         }
 
-        return toResponse(eventRepository.save(event));
+        Event saved = eventRepository.save(event);
+        reminderService.syncReminders(saved, saved.getReminderSchedule());
+        return toResponse(saved);
     }
 
     public void deleteEvent(UUID userId, UUID eventId) {
-        Event event = eventRepository.findById(eventId)
-                .orElseThrow(() -> new RuntimeException("Event not found"));
-        if (!event.getUserId().equals(userId)) {
-            throw new RuntimeException("Access denied");
-        }
+        Event event = eventRepository.findByIdAndUserId(eventId, userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Event", eventId.toString()));
         eventRepository.delete(event);
     }
 
     public EventResponse markAsDone(UUID userId, UUID eventId) {
-        Event event = eventRepository.findById(eventId)
-                .orElseThrow(() -> new RuntimeException("Event not found"));
-        if (!event.getUserId().equals(userId)) {
-            throw new RuntimeException("Access denied");
-        }
+        Event event = eventRepository.findByIdAndUserId(eventId, userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Event", eventId.toString()));
         event.setStatus("done");
         return toResponse(eventRepository.save(event));
     }
 
     public EventResponse snoozeEvent(UUID userId, UUID eventId, String duration) {
-        Event event = eventRepository.findById(eventId)
-                .orElseThrow(() -> new RuntimeException("Event not found"));
-        if (!event.getUserId().equals(userId)) {
-            throw new RuntimeException("Access denied");
-        }
+        Event event = eventRepository.findByIdAndUserId(eventId, userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Event", eventId.toString()));
 
         Duration snoozeDuration = parseDuration(duration);
-        event.setDueDate(event.getDueDate().plusDays(snoozeDuration.toDays()));
-        if (snoozeDuration.toHoursPart() > 0 && event.getDueTime() != null) {
-            event.setDueTime(event.getDueTime().plusHours(snoozeDuration.toHoursPart())
-                    .plusMinutes(snoozeDuration.toMinutesPart()));
-        }
-        event.setStatus(computeStatus(event.getDueDate(), event.getDueTime()));
-        return toResponse(eventRepository.save(event));
+
+        Instant newDueAt = event.getDueAt().plus(snoozeDuration);
+        event.setDueAt(newDueAt);
+
+        ZoneId zone = ZoneId.of(event.getTimezone());
+        event.setDueDate(newDueAt.atZone(zone).toLocalDate());
+        event.setDueTime(newDueAt.atZone(zone).toLocalTime());
+
+        event.setStatus(deadlineStatusService.computeStatus(newDueAt, event.getStatus()));
+        Event saved = eventRepository.save(event);
+        reminderService.syncReminders(saved, saved.getReminderSchedule());
+        return toResponse(saved);
     }
 
-    private String computeStatus(LocalDate dueDate, LocalTime dueTime) {
-        LocalDateTime now = LocalDateTime.now();
-        LocalDateTime due = dueTime != null
-                ? LocalDateTime.of(dueDate, dueTime)
-                : LocalDateTime.of(dueDate, LocalTime.MAX);
-
-        if (due.isBefore(now)) return "overdue";
-        if (due.minusDays(3).isBefore(now)) return "due_soon";
-        return "upcoming";
+    private Instant computeDueAt(LocalDate dueDate, LocalTime dueTime, String timezone) {
+        ZoneId zone = ZoneId.of(timezone);
+        if (dueTime != null) {
+            return LocalDate.of(dueDate.getYear(), dueDate.getMonth(), dueDate.getDayOfMonth())
+                    .atTime(dueTime)
+                    .atZone(zone)
+                    .toInstant();
+        }
+        return dueDate.atStartOfDay(zone).toInstant();
     }
 
     private Duration parseDuration(String duration) {

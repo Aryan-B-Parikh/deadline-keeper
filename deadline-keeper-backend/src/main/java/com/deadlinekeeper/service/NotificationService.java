@@ -1,13 +1,15 @@
 package com.deadlinekeeper.service;
 
 import com.deadlinekeeper.dto.NotificationResponse;
+import com.deadlinekeeper.exception.ResourceNotFoundException;
 import com.deadlinekeeper.model.Notification;
+import com.deadlinekeeper.model.NotificationOutbox;
 import com.deadlinekeeper.model.User;
-import com.deadlinekeeper.notification.NotificationChannel;
+import com.deadlinekeeper.repository.NotificationOutboxRepository;
 import com.deadlinekeeper.repository.NotificationRepository;
-import com.deadlinekeeper.repository.UserRepository;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -15,34 +17,30 @@ import java.util.UUID;
 public class NotificationService {
 
     private final NotificationRepository notificationRepository;
-    private final UserRepository userRepository;
-    private final List<NotificationChannel> channels;
+    private final NotificationOutboxRepository outboxRepository;
 
     public NotificationService(NotificationRepository notificationRepository,
-                               UserRepository userRepository,
-                               List<NotificationChannel> channels) {
+                               NotificationOutboxRepository outboxRepository) {
         this.notificationRepository = notificationRepository;
-        this.userRepository = userRepository;
-        this.channels = channels;
+        this.outboxRepository = outboxRepository;
     }
 
     public void send(User user, String title, String message, UUID eventId) {
-        for (NotificationChannel channel : channels) {
-            try {
-                channel.send(user, title, message);
+        String idempotencyKey = "direct_%s_%s".formatted(
+                UUID.randomUUID(), Instant.now().toEpochMilli());
 
-                Notification notification = new Notification();
-                notification.setUserId(user.getId());
-                notification.setEventId(eventId);
-                notification.setTitle(title);
-                notification.setMessage(message);
-                notification.setChannel(channel.getChannelName());
-                notificationRepository.save(notification);
-            } catch (Exception e) {
-                // Log but don't fail other channels
-                System.err.println("Failed to send notification via " + channel.getChannelName() + ": " + e.getMessage());
-            }
-        }
+        NotificationOutbox outbox = new NotificationOutbox();
+        outbox.setUserId(user.getId());
+        outbox.setEventId(eventId);
+        outbox.setTitle(title);
+        outbox.setMessage(message);
+        outbox.setChannel("in_app");
+        outbox.setIdempotencyKey(idempotencyKey);
+        outbox.setStatus("pending");
+        outbox.setAttemptCount(0);
+        outbox.setMaxAttempts(1);
+        outbox.setScheduledAt(Instant.now());
+        outboxRepository.save(outbox);
     }
 
     public List<NotificationResponse> getUserNotifications(UUID userId, boolean unreadOnly) {
@@ -56,11 +54,8 @@ public class NotificationService {
     }
 
     public void markAsRead(UUID userId, UUID notificationId) {
-        Notification notification = notificationRepository.findById(notificationId)
-                .orElseThrow(() -> new RuntimeException("Notification not found"));
-        if (!notification.getUserId().equals(userId)) {
-            throw new RuntimeException("Access denied");
-        }
+        Notification notification = notificationRepository.findByIdAndUserId(notificationId, userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Notification", notificationId.toString()));
         notification.setIsRead(true);
         notificationRepository.save(notification);
     }

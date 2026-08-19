@@ -6,8 +6,10 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Repository
@@ -17,8 +19,16 @@ public interface EventRepository extends JpaRepository<Event, UUID> {
 
     List<Event> findByUserId(UUID userId);
 
-    @Query("SELECT e FROM Event e WHERE e.userId = :userId AND e.status IN :statuses ORDER BY e.dueDate ASC")
+    Optional<Event> findByIdAndUserId(UUID id, UUID userId);
+
+    @Query("SELECT e FROM Event e WHERE e.userId = :userId AND e.status IN :statuses ORDER BY e.dueAt ASC")
     List<Event> findByUserIdAndStatusIn(@Param("userId") UUID userId, @Param("statuses") List<String> statuses);
+
+    @Query("SELECT e FROM Event e WHERE e.status != 'done' AND e.dueAt <= :deadline")
+    List<Event> findPendingBefore(@Param("deadline") Instant deadline);
+
+    @Query("SELECT e FROM Event e WHERE e.status IN ('upcoming','due_soon','overdue') AND e.dueAt BETWEEN :from AND :to")
+    List<Event> findActiveBetween(@Param("from") Instant from, @Param("to") Instant to);
 
     @Query("SELECT e FROM Event e WHERE e.status != 'done' AND e.dueDate <= :date")
     List<Event> findUpcomingEventsBefore(@Param("date") LocalDate date);

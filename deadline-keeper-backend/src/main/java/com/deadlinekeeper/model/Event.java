@@ -39,6 +39,9 @@ public class Event {
     @Column(name = "due_time")
     private LocalTime dueTime;
 
+    @Column(name = "due_at")
+    private Instant dueAt;
+
     @Column(nullable = false)
     private String timezone = "UTC";
 
@@ -54,9 +57,19 @@ public class Event {
     @Column(name = "confidence_score")
     private Float confidenceScore = 1.0f;
 
+    @Column(name = "ai_confidence")
+    private Float aiConfidence;
+
+    @Column(name = "confirmation_status")
+    private String confirmationStatus = "system";
+
+    @Column(name = "user_confirmed")
+    private Boolean userConfirmed = false;
+
     @Column(nullable = false)
     private String status = "upcoming";
 
+    // Kept for backward compatibility with frontend; will be replaced by Reminder entity
     @JdbcTypeCode(SqlTypes.ARRAY)
     @Column(name = "reminder_schedule", columnDefinition = "text[]")
     private List<String> reminderSchedule;
