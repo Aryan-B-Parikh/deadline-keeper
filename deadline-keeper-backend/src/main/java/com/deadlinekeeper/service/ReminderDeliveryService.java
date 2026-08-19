@@ -67,11 +67,8 @@ public class ReminderDeliveryService {
                 event.getDueAt().atZone(ZoneId.of(event.getTimezone()))
                         .format(DateTimeFormatter.ofPattern("MMM d, yyyy HH:mm")));
 
-        outboxService.enqueue(user.getId(), event.getId(), title, message, reminder.getChannel());
-
-        delivery.setStatus("sent");
-        delivery.setSentAt(Instant.now());
-        deliveryRepository.save(delivery);
+        // Enqueue to outbox — delivery status stays PENDING until outbox processor confirms
+        outboxService.enqueue(delivery.getId(), user.getId(), event.getId(), title, message, reminder.getChannel());
     }
 
     private String formatDuration(Duration duration) {

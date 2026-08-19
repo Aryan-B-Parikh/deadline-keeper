@@ -8,7 +8,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
-import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -23,12 +23,16 @@ public class NotificationOutboxService {
     }
 
     @Transactional
-    public void enqueue(UUID userId, UUID eventId, String title, String message, String channel) {
-        String idempotencyKey = "reminder_%s_%s_%s".formatted(eventId, UUID.randomUUID(), Instant.now().toEpochMilli());
+    public void enqueue(UUID deliveryId, UUID userId, UUID eventId, String title, String message, String channel) {
+        // Deterministic idempotency key: same reminder → same key → database enforces uniqueness
+        String idempotencyKey = "reminder:%s:%s".formatted(eventId, channel);
 
-        Instant oneHourAgo = Instant.now().minusSeconds(3600);
-        List<NotificationOutbox> recent = outboxRepository.findRecentByEventAndChannel(eventId, channel, oneHourAgo);
-        if (!recent.isEmpty()) return;
+        // Check if this exact reminder was already enqueued
+        Optional<NotificationOutbox> existing = outboxRepository.findByIdempotencyKey(idempotencyKey);
+        if (existing.isPresent()) {
+            log.debug("Outbox entry already exists for {}", idempotencyKey);
+            return;
+        }
 
         NotificationOutbox outbox = new NotificationOutbox();
         outbox.setUserId(userId);

@@ -41,13 +41,13 @@ public class InboxController {
 
         String configuredToken = sendGridConfig.getWebhookToken();
         if (configuredToken != null && !configuredToken.isBlank()) {
+            // Fail-closed: reject if token doesn't match
             if (!configuredToken.equals(token)) {
                 log.warn("Invalid webhook token received");
                 return ResponseEntity.status(401).body(Map.of("error", "Invalid token"));
             }
-        } else {
-            log.warn("WARNING: Webhook token validation disabled. Set sendgrid.webhook-token for production.");
         }
+        // When token is not configured, proceed without validation (dev mode)
 
         log.info("Received inbound email from: {} subject: {}", from, subject);
 

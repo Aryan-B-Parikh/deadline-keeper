@@ -16,4 +16,6 @@ public interface ReminderDeliveryRepository extends JpaRepository<ReminderDelive
     Optional<ReminderDelivery> findByEventIdAndReminderIdAndChannel(UUID eventId, UUID reminderId, String channel);
 
     List<ReminderDelivery> findByStatusIn(List<String> statuses);
+
+    Optional<ReminderDelivery> findByEventIdAndChannel(UUID eventId, String channel);
 }
