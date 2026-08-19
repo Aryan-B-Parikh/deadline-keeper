@@ -41,8 +41,8 @@ Create an event.
   "dueAt": "2026-12-15T14:00:00Z",
   "timezone": "America/New_York",
   "reminders": [
-    { "offsetSeconds": 604800, "channel": "email", "enabled": true },
-    { "offsetSeconds": 86400, "channel": "email", "enabled": true }
+    { "offsetSeconds": 604800, "channel": "email" },
+    { "offsetSeconds": 86400, "channel": "email" }
   ],
   "notes": "Room 302"
 }
