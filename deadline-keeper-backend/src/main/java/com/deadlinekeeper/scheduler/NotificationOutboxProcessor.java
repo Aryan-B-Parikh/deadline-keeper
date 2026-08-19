@@ -98,7 +98,7 @@ public class NotificationOutboxProcessor {
             return;
         }
 
-        channel.send(user, entry.getTitle(), entry.getMessage(), entry.getIdempotencyKey());
+        channel.send(user, entry.getTitle(), entry.getMessage(), entry.getIdempotencyKey(), entry.getEventId());
         writer.markSent(entry);
     }
 
