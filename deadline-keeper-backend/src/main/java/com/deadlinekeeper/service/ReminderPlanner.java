@@ -3,19 +3,15 @@ package com.deadlinekeeper.service;
 import com.deadlinekeeper.model.Event;
 import com.deadlinekeeper.model.Reminder;
 import com.deadlinekeeper.repository.ReminderRepository;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 
 @Service
 public class ReminderPlanner {
-
-    private static final Logger log = LoggerFactory.getLogger(ReminderPlanner.class);
 
     private final ReminderRepository reminderRepository;
     private final ReminderDeliveryService deliveryService;
@@ -54,14 +50,11 @@ public class ReminderPlanner {
             Instant fireTime = event.getDueAt().minusSeconds(reminder.getOffsetSeconds());
             if (fireTime.isAfter(now)) continue;
 
-            deliveryService.createDeliveryIfAbsent(event, reminder, fireTime);
+            try {
+                deliveryService.createDeliveryIfAbsent(event, reminder, fireTime);
+            } catch (DataIntegrityViolationException duplicate) {
+                // Another scheduler instance won the unique delivery race.
+            }
         }
-    }
-
-    private Duration parseOffset(String offset) {
-        if (offset.endsWith("d")) return Duration.ofDays(Long.parseLong(offset.replace("d", "")));
-        if (offset.endsWith("h")) return Duration.ofHours(Long.parseLong(offset.replace("h", "")));
-        if (offset.endsWith("m")) return Duration.ofMinutes(Long.parseLong(offset.replace("m", "")));
-        return Duration.ofDays(1);
     }
 }
