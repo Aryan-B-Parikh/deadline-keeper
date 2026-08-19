@@ -6,10 +6,6 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.time.Instant;
-import java.time.LocalDate;
-import java.time.LocalTime;
-import java.time.ZoneId;
-import java.time.ZoneOffset;
 import java.util.UUID;
 
 @Entity
@@ -76,31 +72,5 @@ public class Event {
     @PreUpdate
     protected void onUpdate() {
         updatedAt = Instant.now();
-    }
-
-    // Helper conversion methods derived from canonical dueAt + timezone for API compatibility
-    @Transient
-    public LocalDate getDueDate() {
-        if (dueAt == null) return null;
-        return dueAt.atZone(getZoneIdSafe()).toLocalDate();
-    }
-
-    @Transient
-    public LocalTime getDueTime() {
-        if (dueAt == null) return null;
-        return dueAt.atZone(getZoneIdSafe()).toLocalTime();
-    }
-
-    @Transient
-    public Float getConfidenceScore() {
-        return aiConfidence;
-    }
-
-    private ZoneId getZoneIdSafe() {
-        try {
-            return ZoneId.of(timezone != null ? timezone : "UTC");
-        } catch (Exception e) {
-            return ZoneOffset.UTC;
-        }
     }
 }
