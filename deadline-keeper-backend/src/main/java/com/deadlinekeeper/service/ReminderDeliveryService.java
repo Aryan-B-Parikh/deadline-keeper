@@ -30,10 +30,6 @@ public class ReminderDeliveryService {
         this.userRepository = userRepository;
     }
 
-    /**
-     * Creates one delivery in an independent transaction. The unique database constraint
-     * handles concurrent schedulers; a duplicate simply rolls back this small transaction.
-     */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void createDeliveryIfAbsent(Event event, Reminder reminder, Instant fireTime) {
         if (deliveryRepository.existsByEventIdAndReminderIdAndChannel(
@@ -45,7 +41,6 @@ public class ReminderDeliveryService {
         delivery.setScheduledAt(fireTime);
         delivery.setChannel(reminder.getChannel());
         delivery.setStatus("pending");
-        delivery.setAttemptCount(0);
 
         deliveryRepository.saveAndFlush(delivery);
 
