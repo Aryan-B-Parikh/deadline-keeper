@@ -3,6 +3,7 @@ package com.deadlinekeeper.dto;
 import lombok.Builder;
 import lombok.Getter;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
@@ -19,10 +20,15 @@ public class ExtractionResult {
     public static class ExtractedEvent {
         private String title;
         private String type;
-        private LocalDate dueDate;
-        private LocalTime dueTime;
+        private Instant dueAt;
+        @Deprecated
+        private LocalDate dueDate; // legacy
+        @Deprecated
+        private LocalTime dueTime; // legacy
         private String timezone;
-        private float confidenceScore;
+        @Deprecated
+        private float confidenceScore; // legacy
+        private Float aiConfidence;
         private boolean needsClarification;
     }
 }

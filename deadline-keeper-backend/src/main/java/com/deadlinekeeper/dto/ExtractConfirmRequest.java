@@ -3,6 +3,7 @@ package com.deadlinekeeper.dto;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
@@ -21,9 +22,13 @@ public class ExtractConfirmRequest {
     public static class ConfirmedEvent {
         private String title;
         private String type;
-        private LocalDate dueDate;
-        private LocalTime dueTime;
+        private Instant dueAt;
+        @Deprecated
+        private LocalDate dueDate; // legacy
+        @Deprecated
+        private LocalTime dueTime; // legacy
         private String timezone;
+        @Deprecated
         private List<String> reminderSchedule;
         private String notes;
     }

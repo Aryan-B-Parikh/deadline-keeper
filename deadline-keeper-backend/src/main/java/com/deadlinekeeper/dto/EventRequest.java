@@ -6,6 +6,7 @@ import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
@@ -21,14 +22,16 @@ public class EventRequest {
     @NotBlank(message = "Type is required")
     private String type;
 
-    // Input convenience fields — dueAt is computed from these + timezone
-    @NotNull(message = "Due date is required")
+    private Instant dueAt;
+
+    // Input convenience fields — dueAt is computed from these + timezone (legacy)
     private LocalDate dueDate;
 
     private LocalTime dueTime;
 
     private String timezone;
 
+    @Deprecated
     private List<String> reminderSchedule;
 
     @Size(max = 5000, message = "Notes must be under 5000 characters")

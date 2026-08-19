@@ -65,8 +65,8 @@ public class ExtractionService {
             if (confirmed.getTitle() == null || confirmed.getTitle().isBlank()) {
                 throw new ValidationException("Event title is required");
             }
-            if (confirmed.getDueDate() == null) {
-                throw new ValidationException("Due date is required for event: " + confirmed.getTitle());
+            if (confirmed.getDueAt() == null && confirmed.getDueDate() == null) {
+                throw new ValidationException("Due date or dueAt is required for event: " + confirmed.getTitle());
             }
 
             String tz = confirmed.getTimezone() != null ? confirmed.getTimezone() : "UTC";
@@ -78,9 +78,12 @@ public class ExtractionService {
                 tz = "UTC";
             }
 
-            LocalTime time = confirmed.getDueTime() != null ? confirmed.getDueTime() : LocalTime.of(23, 59);
-            Instant dueAt = LocalDateTime.of(confirmed.getDueDate(), time)
-                    .atZone(zone).toInstant();
+            Instant dueAt = confirmed.getDueAt();
+            if (dueAt == null) {
+                LocalTime time = confirmed.getDueTime() != null ? confirmed.getDueTime() : LocalTime.of(23, 59);
+                dueAt = LocalDateTime.of(confirmed.getDueDate(), time)
+                        .atZone(zone).toInstant();
+            }
 
             Event event = new Event();
             event.setUserId(userId);
@@ -129,14 +132,32 @@ public class ExtractionService {
 
         if (result.has("events") && result.get("events").isArray()) {
             for (JsonNode eventNode : result.get("events")) {
+                LocalDate parsedDate = parseDate(eventNode, "due_date");
+                LocalTime parsedTime = parseTime(eventNode, "due_time");
+                String parsedZone = getTextOrNull(eventNode, "timezone");
+                if (parsedZone == null) parsedZone = "UTC";
+                
+                Instant computedDueAt = null;
+                if (parsedDate != null) {
+                    ZoneId zoneId = ZoneId.of(parsedZone);
+                    if (parsedTime != null) {
+                        computedDueAt = parsedDate.atTime(parsedTime).atZone(zoneId).toInstant();
+                    } else {
+                        computedDueAt = parsedDate.atStartOfDay(zoneId).toInstant();
+                    }
+                }
+                
+                float conf = eventNode.has("confidence") ? (float) eventNode.get("confidence").asDouble() : 0.5f;
+
                 ExtractionResult.ExtractedEvent extracted = ExtractionResult.ExtractedEvent.builder()
                         .title(getTextOrDefault(eventNode, "title", "Untitled Event"))
                         .type(getTextOrDefault(eventNode, "type", "other"))
-                        .dueDate(parseDate(eventNode, "due_date"))
-                        .dueTime(parseTime(eventNode, "due_time"))
-                        .timezone(getTextOrNull(eventNode, "timezone"))
-                        .confidenceScore(eventNode.has("confidence")
-                                ? (float) eventNode.get("confidence").asDouble() : 0.5f)
+                        .dueAt(computedDueAt)
+                        .dueDate(parsedDate)
+                        .dueTime(parsedTime)
+                        .timezone(parsedZone)
+                        .confidenceScore(conf)
+                        .aiConfidence(conf)
                         .needsClarification(eventNode.has("needs_clarification")
                                 && eventNode.get("needs_clarification").asBoolean())
                         .build();
@@ -209,11 +230,13 @@ public class ExtractionService {
                 .id(event.getId())
                 .title(event.getTitle())
                 .type(event.getType())
+                .dueAt(event.getDueAt())
                 .dueDate(dueDate)
                 .dueTime(dueTime)
                 .timezone(event.getTimezone())
                 .source(event.getSource())
                 .confidenceScore(event.getAiConfidence() != null ? event.getAiConfidence() : 1.0f)
+                .aiConfidence(event.getAiConfidence() != null ? event.getAiConfidence() : 1.0f)
                 .status(event.getStatus())
                 .notes(event.getNotes())
                 .sourceFileUrl(event.getSourceFileUrl())

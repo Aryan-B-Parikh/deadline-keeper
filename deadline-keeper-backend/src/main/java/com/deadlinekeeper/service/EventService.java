@@ -55,7 +55,7 @@ public class EventService {
 
         String timezone = request.getTimezone() != null ? request.getTimezone() : "UTC";
         event.setTimezone(timezone);
-        event.setDueAt(computeDueAt(request.getDueDate(), request.getDueTime(), timezone));
+        event.setDueAt(computeDueAt(request.getDueAt(), request.getDueDate(), request.getDueTime(), timezone));
 
         event.setSource("manual");
         event.setAiConfidence(1.0f);
@@ -78,7 +78,7 @@ public class EventService {
         if (request.getTimezone() != null) event.setTimezone(request.getTimezone());
         event.setNotes(request.getNotes());
 
-        event.setDueAt(computeDueAt(request.getDueDate(), request.getDueTime(), event.getTimezone()));
+        event.setDueAt(computeDueAt(request.getDueAt(), request.getDueDate(), request.getDueTime(), event.getTimezone()));
 
         if (!event.getStatus().equals("done")) {
             event.setStatus(deadlineStatusService.computeStatus(event.getDueAt(), event.getStatus()));
@@ -117,7 +117,13 @@ public class EventService {
         return toResponse(saved);
     }
 
-    private Instant computeDueAt(LocalDate dueDate, LocalTime dueTime, String timezone) {
+    private Instant computeDueAt(Instant dueAt, LocalDate dueDate, LocalTime dueTime, String timezone) {
+        if (dueAt != null) {
+            return dueAt;
+        }
+        if (dueDate == null) {
+            throw new IllegalArgumentException("Either dueAt or dueDate must be provided");
+        }
         ZoneId zone = ZoneId.of(timezone);
         if (dueTime != null) {
             return LocalDate.of(dueDate.getYear(), dueDate.getMonth(), dueDate.getDayOfMonth())
@@ -159,11 +165,13 @@ public class EventService {
                 .id(event.getId())
                 .title(event.getTitle())
                 .type(event.getType())
+                .dueAt(event.getDueAt())
                 .dueDate(dueDate)
                 .dueTime(dueTime)
                 .timezone(event.getTimezone())
                 .source(event.getSource())
                 .confidenceScore(event.getAiConfidence() != null ? event.getAiConfidence() : 1.0f)
+                .aiConfidence(event.getAiConfidence() != null ? event.getAiConfidence() : 1.0f)
                 .status(event.getStatus())
                 .notes(event.getNotes())
                 .sourceFileUrl(event.getSourceFileUrl())

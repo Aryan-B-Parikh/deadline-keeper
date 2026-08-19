@@ -15,12 +15,18 @@ public class EventResponse {
     private UUID id;
     private String title;
     private String type;
-    private LocalDate dueDate;
-    private LocalTime dueTime;
+    @Deprecated
+    private LocalDate dueDate; // legacy
+    @Deprecated
+    private LocalTime dueTime; // legacy
+    private Instant dueAt;
     private String timezone;
     private String source;
-    private Float confidenceScore;
+    @Deprecated
+    private Float confidenceScore; // legacy
+    private Float aiConfidence;
     private String status;
+    @Deprecated
     private List<String> reminderSchedule;
     private String notes;
     private String sourceFileUrl;
