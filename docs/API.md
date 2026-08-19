@@ -2,7 +2,7 @@
 
 Development base URL: `http://localhost:8080`. Production uses configured `APP_BASE_URL`.
 
-All authenticated endpoints require a Supabase JWT in the `Authorization` header.
+All authenticated endpoints require a Supabase user JWT in the `Authorization` header.
 
 ## Health
 
@@ -13,7 +13,7 @@ All authenticated endpoints require a Supabase JWT in the `Authorization` header
 ## Events
 
 ### `GET /api/events`
-List the authenticated user's events. Optional `status`: `upcoming`, `due_soon`, `overdue`, or `done`.
+List the authenticated user's events. Optional `status`: `upcoming`, `due_soon`, `overdue`, `done`, or `cancelled`.
 
 ### `GET /api/events/{id}`
 Get one event owned by the authenticated user.
@@ -35,7 +35,7 @@ Create an event using the canonical representation:
 }
 ```
 
-`dueAt` is required and is the canonical instant. `timezone` is optional and defaults to `UTC`. Reminders are first-class reminder definitions.
+`dueAt` is required and is the canonical instant. `timezone` is optional and defaults to `UTC`. Supported reminder channels are `email` and `in_app`; offsets must be between 0 and 7 days.
 
 ### `PUT /api/events/{id}`
 Replace editable event fields using the same request shape as POST.
@@ -47,7 +47,7 @@ Delete an owned event and dependent reminder data according to database foreign-
 Mark an event as done.
 
 ### `POST /api/events/{id}/snooze`
-Move `dueAt` forward. Example: `{ "duration": "1d" }`. Supported suffixes: `d`, `h`, `m`.
+Move `dueAt` forward. Example: `{ "duration": "1d" }`. Supported suffixes: `d`, `h`, `m`; duration must be positive.
 
 ## Extraction
 
@@ -62,12 +62,13 @@ Extraction results use `dueAt`, `timezone`, and `aiConfidence`.
 - `POST /api/notifications/{id}/read`
 - `GET /api/notifications/unread-count`
 
-All notification queries are scoped to the authenticated user.
+All notification queries are scoped to the authenticated user. In-app notifications retain their associated event ID when available.
 
 ## User Profile
 
 - `GET /api/user/profile`
 - `PUT /api/user/profile`
+- `GET /api/user/profile/forwarding-token` — returns the authenticated user's unique forwarding address.
 
 Profile updates include display name, IANA timezone, and notification preferences.
 
@@ -80,11 +81,19 @@ Profile updates include display name, IANA timezone, and notification preference
 
 ## Inbox Webhook
 
-`POST /api/inbox/webhook/{token}` accepts the SendGrid Inbound Parse payload. The configured token is required and is compared using a constant-time comparison. The endpoint fails closed when the token is not configured.
+SendGrid Inbound Parse posts to:
+
+`POST /api/inbox/webhook`
+
+The recipient address must be the user's generated forwarding address:
+
+`deadline+<user-token>@<inbox-parse-domain>`
+
+The backend extracts the token from the recipient address, resolves the owning user, and performs a constant-time token comparison. A legacy `/api/inbox/webhook/{token}` path is also accepted for compatibility. There is no sender-email fallback and no shared webhook token.
 
 ## Notification delivery semantics
 
-Notification processing is **at least once**. PostgreSQL atomically assigns outbox jobs with `FOR UPDATE SKIP LOCKED`, worker leases protect ownership, and a watchdog recovers crashed workers. A deterministic `idempotency_key` is attached to SendGrid custom arguments for reconciliation and webhook correlation; it is not a provider-side exactly-once guarantee.
+Notification processing is **at least once**. PostgreSQL atomically assigns due outbox jobs with `FOR UPDATE SKIP LOCKED`, worker leases protect ownership, and a watchdog recovers crashed workers. Deterministic notification identities prevent duplicate in-app records. A deterministic `idempotency_key` is attached to SendGrid custom arguments for reconciliation and webhook correlation; it is not a provider-side exactly-once guarantee.
 
 ## Error envelope
 
