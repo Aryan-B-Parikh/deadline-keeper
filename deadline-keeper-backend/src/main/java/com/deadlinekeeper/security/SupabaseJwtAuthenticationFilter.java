@@ -11,9 +11,6 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -23,26 +20,33 @@ import javax.crypto.spec.SecretKeySpec;
 import java.io.IOException;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
-import java.security.*;
+import java.security.AlgorithmParameters;
+import java.security.KeyFactory;
+import java.security.PublicKey;
 import java.security.spec.ECGenParameterSpec;
-import java.security.spec.ECPublicKeySpec;
 import java.security.spec.ECParameterSpec;
-import java.util.*;
+import java.security.spec.ECPoint;
+import java.security.spec.ECPublicKeySpec;
+import java.util.Base64;
+import java.util.Collections;
+import java.util.Date;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Component
 public class SupabaseJwtAuthenticationFilter extends OncePerRequestFilter {
 
     private static final Logger log = LoggerFactory.getLogger(SupabaseJwtAuthenticationFilter.class);
+    private static final long CACHE_TTL_MS = 3_600_000L;
+    private static final String JWKS_URL_TEMPLATE = "%s/auth/v1/.well-known/jwks.json";
+
     private final SupabaseConfig supabaseConfig;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final RestTemplate restTemplate = new RestTemplate();
-
     private final Map<String, PublicKey> keyCache = new ConcurrentHashMap<>();
-    private volatile long cacheExpiry = 0;
-
-    private static final long CACHE_TTL_MS = 3600000;
-    private static final String JWKS_URL_TEMPLATE = "%s/auth/v1/.well-known/jwks.json";
+    private volatile long cacheExpiry;
 
     public SupabaseJwtAuthenticationFilter(SupabaseConfig supabaseConfig) {
         this.supabaseConfig = supabaseConfig;
@@ -52,7 +56,6 @@ public class SupabaseJwtAuthenticationFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
-
         String authHeader = request.getHeader("Authorization");
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
             String token = authHeader.substring(7);
@@ -63,16 +66,14 @@ public class SupabaseJwtAuthenticationFilter extends OncePerRequestFilter {
                     SupabaseUserPrincipal principal = new SupabaseUserPrincipal(
                             UUID.fromString(userId),
                             (String) claims.get("email"));
-
-                    UsernamePasswordAuthenticationToken authentication =
-                            new UsernamePasswordAuthenticationToken(
-                                    principal, null,
-                                    Collections.singletonList(new SimpleGrantedAuthority("ROLE_USER")));
-                    SecurityContextHolder.getContext().setAuthentication(authentication);
+                    var authentication = new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
+                            principal, null, Collections.singletonList(
+                            new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_USER")));
+                    org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(authentication);
                 }
             } catch (Exception e) {
-                log.info("JWT auth failed: {}", e.getMessage());
-                SecurityContextHolder.clearContext();
+                log.debug("JWT authentication failed: {}", e.getMessage());
+                org.springframework.security.core.context.SecurityContextHolder.clearContext();
             }
         }
 
@@ -81,68 +82,46 @@ public class SupabaseJwtAuthenticationFilter extends OncePerRequestFilter {
 
     private Claims verifyAndParse(String token) throws Exception {
         String[] parts = token.split("\\.");
-        if (parts.length != 3) throw new IllegalArgumentException("Invalid JWT: expected 3 parts");
+        if (parts.length != 3) throw new SecurityException("Invalid JWT");
 
         JsonNode header = parseBase64Json(parts[0]);
-        String alg = header.has("alg") ? header.get("alg").asText() : null;
+        String algorithm = header.has("alg") ? header.get("alg").asText() : null;
         String kid = header.has("kid") ? header.get("kid").asText() : null;
 
-        if (!"ES256".equals(alg) && !"HS256".equals(alg)) {
-            throw new SecurityException("Unsupported JWT algorithm: " + alg);
+        if (!"ES256".equals(algorithm) && !"HS256".equals(algorithm)) {
+            throw new SecurityException("Unsupported JWT algorithm");
         }
 
-        if ("ES256".equals(alg)) {
-            if (kid == null) throw new SecurityException("ES256 token missing kid header");
+        Claims claims;
+        if ("ES256".equals(algorithm)) {
+            if (kid == null || kid.isBlank()) throw new SecurityException("JWT missing kid header");
             PublicKey publicKey = getECPublicKey(kid);
-            if (publicKey == null) throw new SecurityException("No public key found for kid: " + kid);
-
-            Claims claims = Jwts.parser()
-                    .verifyWith(publicKey)
-                    .build()
-                    .parseSignedClaims(token)
-                    .getPayload();
-
-            validateClaims(claims);
-            return claims;
+            if (publicKey == null) throw new SecurityException("JWT signing key not found");
+            claims = Jwts.parser().verifyWith(publicKey).build().parseSignedClaims(token).getPayload();
+        } else {
+            claims = verifyWithHMAC(token);
         }
 
-        Claims claims = verifyWithHMAC(token);
         validateClaims(claims);
         return claims;
     }
 
     private void validateClaims(Claims claims) {
-        String issuer = claims.getIssuer();
-        String expectedIssuer = supabaseConfig.getUrl() + "/auth/v1";
+        String baseUrl = normalizeBaseUrl(supabaseConfig.getUrl());
+        String expectedIssuer = baseUrl + "/auth/v1";
 
-        if (issuer == null || issuer.isBlank()) {
-            throw new SecurityException("JWT missing required issuer claim");
-        }
-        if (!issuer.equals(expectedIssuer)) {
-            throw new SecurityException("Invalid JWT issuer: " + issuer);
+        if (!expectedIssuer.equals(claims.getIssuer())) {
+            throw new SecurityException("Invalid JWT issuer");
         }
 
         Set<String> audience = claims.getAudience();
-        String projectAudience = supabaseConfig.getUrl() != null ? supabaseConfig.getUrl()
-                .replace("https://", "")
-                .replace("http://", "")
-                .split("\\.")[0] : "";
-
-        if (audience == null || audience.isEmpty()) {
-            throw new SecurityException("JWT missing required audience claim");
+        if (audience == null || audience.isEmpty() || !audience.contains("authenticated")) {
+            throw new SecurityException("Invalid JWT audience");
         }
 
-        boolean validAudience = audience.contains("authenticated") 
-                || (!projectAudience.isEmpty() && audience.contains(projectAudience));
-        if (!validAudience) {
-            throw new SecurityException("Invalid JWT audience: " + audience);
-        }
-
-        if (claims.getExpiration() == null) {
-            throw new SecurityException("JWT missing required expiration claim");
-        }
-        if (claims.getExpiration().before(new Date())) {
-            throw new SecurityException("JWT has expired");
+        Date expiration = claims.getExpiration();
+        if (expiration == null || !expiration.after(new Date())) {
+            throw new SecurityException("JWT is expired or missing expiration");
         }
     }
 
@@ -151,74 +130,60 @@ public class SupabaseJwtAuthenticationFilter extends OncePerRequestFilter {
             return keyCache.get(kid);
         }
 
-        String url = JWKS_URL_TEMPLATE.formatted(supabaseConfig.getUrl());
+        String url = JWKS_URL_TEMPLATE.formatted(normalizeBaseUrl(supabaseConfig.getUrl()));
         JsonNode jwks = restTemplate.getForObject(url, JsonNode.class);
         if (jwks == null || !jwks.has("keys")) return null;
 
         for (JsonNode keyNode : jwks.get("keys")) {
-            String k = keyNode.get("kid").asText();
-            if ("EC".equals(keyNode.get("kty").asText())) {
-                byte[] xBytes = Base64.getUrlDecoder().decode(
-                        keyNode.get("x").asText() + "====".substring(0, (4 - keyNode.get("x").asText().length() % 4) % 4));
-                byte[] yBytes = Base64.getUrlDecoder().decode(
-                        keyNode.get("y").asText() + "====".substring(0, (4 - keyNode.get("y").asText().length() % 4) % 4));
+            if (!"EC".equals(keyNode.path("kty").asText())) continue;
+            String keyId = keyNode.path("kid").asText();
+            if (keyId.isBlank()) continue;
 
-                BigInteger x = new BigInteger(1, xBytes);
-                BigInteger y = new BigInteger(1, yBytes);
+            byte[] xBytes = decodeBase64Url(keyNode.path("x").asText());
+            byte[] yBytes = decodeBase64Url(keyNode.path("y").asText());
+            BigInteger x = new BigInteger(1, xBytes);
+            BigInteger y = new BigInteger(1, yBytes);
 
-                AlgorithmParameters params = AlgorithmParameters.getInstance("EC");
-                params.init(new ECGenParameterSpec("secp256r1"));
-                ECParameterSpec ecParameters = params.getParameterSpec(ECParameterSpec.class);
-
-                ECPublicKeySpec pubKeySpec = new ECPublicKeySpec(new java.security.spec.ECPoint(x, y), ecParameters);
-                KeyFactory kf = KeyFactory.getInstance("EC");
-                PublicKey pk = kf.generatePublic(pubKeySpec);
-
-                keyCache.put(k, pk);
-            }
+            AlgorithmParameters params = AlgorithmParameters.getInstance("EC");
+            params.init(new ECGenParameterSpec("secp256r1"));
+            ECParameterSpec ecParameters = params.getParameterSpec(ECParameterSpec.class);
+            ECPublicKeySpec spec = new ECPublicKeySpec(new ECPoint(x, y), ecParameters);
+            PublicKey publicKey = KeyFactory.getInstance("EC").generatePublic(spec);
+            keyCache.put(keyId, publicKey);
         }
 
         cacheExpiry = System.currentTimeMillis() + CACHE_TTL_MS;
         return keyCache.get(kid);
     }
 
-    private Claims verifyWithHMAC(String token) throws Exception {
+    private Claims verifyWithHMAC(String token) {
         String secret = supabaseConfig.getJwtSecret();
+        if (secret == null || secret.isBlank()) throw new SecurityException("JWT secret is not configured");
         SecretKey key = new SecretKeySpec(decodeJwtSecret(secret), "HmacSHA256");
-        return Jwts.parser()
-                .verifyWith(key)
-                .build()
-                .parseSignedClaims(token)
-                .getPayload();
+        return Jwts.parser().verifyWith(key).build().parseSignedClaims(token).getPayload();
     }
 
-    private JsonNode parseBase64Json(String base64) throws IOException {
-        String padded = base64 + "====".substring(0, (4 - base64.length() % 4) % 4);
-        byte[] decoded = Base64.getUrlDecoder().decode(padded);
-        return objectMapper.readTree(new String(decoded, StandardCharsets.UTF_8));
+    private JsonNode parseBase64Json(String value) throws IOException {
+        return objectMapper.readTree(new String(decodeBase64Url(value), StandardCharsets.UTF_8));
+    }
+
+    private static byte[] decodeBase64Url(String value) {
+        if (value == null || value.isBlank()) throw new IllegalArgumentException("Invalid base64url value");
+        int padding = (4 - value.length() % 4) % 4;
+        return Base64.getUrlDecoder().decode(value + "=".repeat(padding));
     }
 
     private static byte[] decodeJwtSecret(String secret) {
-        if (secret == null || secret.isBlank()) {
-            return new byte[0];
-        }
-        if (secret.startsWith("sb_secret_")) {
-            String raw = secret.substring("sb_secret_".length());
-            try {
-                String padded = raw;
-                int rem = raw.length() % 4;
-                if (rem != 0) {
-                    padded = raw + "=".repeat(4 - rem);
-                }
-                return Base64.getUrlDecoder().decode(padded);
-            } catch (IllegalArgumentException e) {
-                return secret.getBytes(StandardCharsets.UTF_8);
-            }
-        }
+        if (secret.startsWith("sb_secret_")) return decodeBase64Url(secret.substring("sb_secret_".length()));
         try {
             return Base64.getDecoder().decode(secret);
-        } catch (IllegalArgumentException e) {
+        } catch (IllegalArgumentException ignored) {
             return secret.getBytes(StandardCharsets.UTF_8);
         }
+    }
+
+    private static String normalizeBaseUrl(String url) {
+        if (url == null || url.isBlank()) throw new SecurityException("Supabase URL is not configured");
+        return url.replaceAll("/+$", "");
     }
 }
