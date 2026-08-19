@@ -68,7 +68,7 @@ State transitions from `processing` require the worker's ID and an unexpired lea
 
 ### Delivery guarantee
 
-The system provides **at-least-once processing**, not mathematically guaranteed exactly-once external email delivery. A deterministic delivery identity is attached to SendGrid `custom_args` for reconciliation and observability. SendGrid documents `custom_args` as metadata carried into Event Webhook events; it is not a provider-side deduplication guarantee. citeturn0search0turn0search3
+The system provides **at-least-once processing**, not mathematically guaranteed exactly-once external email delivery. A deterministic delivery identity is attached to SendGrid `custom_args` for reconciliation and observability. It is metadata for webhook/event correlation, not a provider-side deduplication guarantee.
 
 The database outbox therefore prioritizes durable processing, ownership correctness, crash recovery, and explicit state transitions.
 
