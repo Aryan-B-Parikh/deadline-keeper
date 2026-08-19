@@ -64,7 +64,6 @@ public class NotificationOutboxProcessor {
         }
     }
 
-    @Transactional
     protected List<NotificationOutbox> claimJobs() {
         List<UUID> claimedIds = outboxRepository.claimPendingJobIds(claimLimit, leaseSeconds);
         if (claimedIds == null || claimedIds.isEmpty()) return List.of();
@@ -72,9 +71,8 @@ public class NotificationOutboxProcessor {
     }
 
     protected void sendViaProvider(NotificationOutbox entry) {
-        ReminderDelivery delivery = null;
         if (entry.getDeliveryId() != null) {
-            delivery = deliveryRepository.findById(entry.getDeliveryId()).orElse(null);
+            ReminderDelivery delivery = deliveryRepository.findById(entry.getDeliveryId()).orElse(null);
             if (delivery == null) {
                 writer.failPermanently(entry, "Delivery not found");
                 return;
