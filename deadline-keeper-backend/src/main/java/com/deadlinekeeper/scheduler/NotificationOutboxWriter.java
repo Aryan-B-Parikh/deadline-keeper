@@ -28,22 +28,21 @@ public class NotificationOutboxWriter {
 
     @Transactional
     public void markSent(NotificationOutbox entry) {
-        NotificationOutbox outbox = outboxRepository.findById(entry.getId()).orElse(null);
-        if (outbox == null || !"processing".equals(outbox.getStatus())) return;
+        int updated = outboxRepository.markSentIfOwned(entry.getId());
+        if (updated == 0) {
+            log.warn("Lost ownership of outbox {} (lease expired or reclaimed) - skipping markSent", entry.getId());
+            return;
+        }
 
-        outbox.setStatus("sent");
-        outbox.setLeaseUntil(null);
-        outboxRepository.save(outbox);
-
-        if (outbox.getDeliveryId() != null) {
-            deliveryRepository.findById(outbox.getDeliveryId()).ifPresent(delivery -> {
+        if (entry.getDeliveryId() != null) {
+            deliveryRepository.findById(entry.getDeliveryId()).ifPresent(delivery -> {
                 delivery.setStatus("sent");
                 delivery.setSentAt(Instant.now());
                 deliveryRepository.save(delivery);
             });
         }
         log.debug("Delivered outbox {} via {} -> delivery {} SENT",
-                outbox.getId(), outbox.getChannel(), outbox.getDeliveryId());
+                entry.getId(), entry.getChannel(), entry.getDeliveryId());
     }
 
     @Transactional
@@ -51,36 +50,39 @@ public class NotificationOutboxWriter {
         NotificationOutbox outbox = outboxRepository.findById(entry.getId()).orElse(null);
         if (outbox == null) return;
 
-        outbox.setLastError(error);
-        outbox.setLeaseUntil(null);
-        outbox.setProcessingStartedAt(null);
-
         if (outbox.getAttemptCount() >= outbox.getMaxAttempts()) {
-            outbox.setStatus("failed");
-            outboxRepository.save(outbox);
-            markDeliveryFailed(outbox.getDeliveryId(), error);
+            int updated = outboxRepository.markFailedIfOwned(entry.getId(), error);
+            if (updated > 0) {
+                markDeliveryFailed(outbox.getDeliveryId(), error);
+                log.info("Outbox {} reached max attempts -> FAILED", entry.getId());
+            } else {
+                log.warn("Lost ownership of outbox {} - skipping markFailed", entry.getId());
+            }
         } else {
             long backoffSeconds = switch (outbox.getAttemptCount()) {
                 case 1 -> 30;
                 case 2 -> 120;
                 default -> 600;
             };
-            outbox.setNextRetryAt(Instant.now().plusSeconds(backoffSeconds));
-            outbox.setStatus("pending");
-            outboxRepository.save(outbox);
+            Instant nextRetry = Instant.now().plusSeconds(backoffSeconds);
+            int updated = outboxRepository.markRetryIfOwned(entry.getId(), nextRetry, error);
+            if (updated == 0) {
+                log.warn("Lost ownership of outbox {} - skipping markRetry", entry.getId());
+            } else {
+                log.debug("Outbox {} scheduled for retry at {}", entry.getId(), nextRetry);
+            }
         }
     }
 
     @Transactional
     public void failPermanently(NotificationOutbox entry, String error) {
-        NotificationOutbox outbox = outboxRepository.findById(entry.getId()).orElse(null);
-        if (outbox == null) return;
-
-        outbox.setStatus("failed");
-        outbox.setLastError(error);
-        outbox.setLeaseUntil(null);
-        outboxRepository.save(outbox);
-        markDeliveryFailed(outbox.getDeliveryId(), error);
+        int updated = outboxRepository.markFailedIfOwned(entry.getId(), error);
+        if (updated > 0) {
+            markDeliveryFailed(entry.getDeliveryId(), error);
+            log.info("Outbox {} permanently failed: {}", entry.getId(), error);
+        } else {
+            log.warn("Lost ownership of outbox {} - skipping failPermanently", entry.getId());
+        }
     }
 
     private void markDeliveryFailed(UUID deliveryId, String error) {
@@ -92,3 +94,4 @@ public class NotificationOutboxWriter {
         });
     }
 }
+

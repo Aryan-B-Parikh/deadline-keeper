@@ -77,8 +77,8 @@ class NotificationOutboxProcessorTest {
     @Test
     @DisplayName("Provider succeeds -> markSent called")
     void providerSucceeds() {
-        when(outboxRepository.claimPendingJobs(50, NotificationOutboxProcessor.LEASE_SECONDS)).thenReturn(1);
-        when(outboxRepository.findByStatusOrderByScheduledAtAsc("processing")).thenReturn(List.of(outbox));
+        when(outboxRepository.claimPendingJobIds(50, NotificationOutboxProcessor.LEASE_SECONDS)).thenReturn(List.of(outboxId));
+        when(outboxRepository.findAllById(List.of(outboxId))).thenReturn(List.of(outbox));
         when(deliveryRepository.findById(deliveryId)).thenReturn(Optional.of(delivery));
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
 
@@ -92,8 +92,8 @@ class NotificationOutboxProcessorTest {
     @Test
     @DisplayName("Provider fails -> handleProviderFailure called")
     void providerFails() {
-        when(outboxRepository.claimPendingJobs(50, NotificationOutboxProcessor.LEASE_SECONDS)).thenReturn(1);
-        when(outboxRepository.findByStatusOrderByScheduledAtAsc("processing")).thenReturn(List.of(outbox));
+        when(outboxRepository.claimPendingJobIds(50, NotificationOutboxProcessor.LEASE_SECONDS)).thenReturn(List.of(outboxId));
+        when(outboxRepository.findAllById(List.of(outboxId))).thenReturn(List.of(outbox));
         when(deliveryRepository.findById(deliveryId)).thenReturn(Optional.of(delivery));
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
 
@@ -167,7 +167,7 @@ class NotificationOutboxProcessorTest {
     @Test
     @DisplayName("No claimed jobs -> no provider calls")
     void noClaimedJobs() {
-        when(outboxRepository.claimPendingJobs(50, NotificationOutboxProcessor.LEASE_SECONDS)).thenReturn(0);
+        when(outboxRepository.claimPendingJobIds(50, NotificationOutboxProcessor.LEASE_SECONDS)).thenReturn(List.of());
 
         processor.processPending();
 
@@ -192,8 +192,9 @@ class NotificationOutboxProcessorTest {
         NotificationOutbox o2 = makeOutbox(dv2);
         NotificationOutbox o3 = makeOutbox(dv3);
 
-        when(outboxRepository.claimPendingJobs(50, NotificationOutboxProcessor.LEASE_SECONDS)).thenReturn(3);
-        when(outboxRepository.findByStatusOrderByScheduledAtAsc("processing")).thenReturn(List.of(o1, o2, o3));
+        List<UUID> claimedIds = List.of(o1.getId(), o2.getId(), o3.getId());
+        when(outboxRepository.claimPendingJobIds(50, NotificationOutboxProcessor.LEASE_SECONDS)).thenReturn(claimedIds);
+        when(outboxRepository.findAllById(claimedIds)).thenReturn(List.of(o1, o2, o3));
         when(deliveryRepository.findById(dv1)).thenReturn(Optional.of(d1));
         when(deliveryRepository.findById(dv2)).thenReturn(Optional.of(d2));
         when(deliveryRepository.findById(dv3)).thenReturn(Optional.of(d3));
@@ -218,14 +219,38 @@ class NotificationOutboxProcessorTest {
     @Test
     @DisplayName("Provider receives idempotency key")
     void providerGetsIdempotencyKey() {
-        when(outboxRepository.claimPendingJobs(50, NotificationOutboxProcessor.LEASE_SECONDS)).thenReturn(1);
-        when(outboxRepository.findByStatusOrderByScheduledAtAsc("processing")).thenReturn(List.of(outbox));
+        when(outboxRepository.claimPendingJobIds(50, NotificationOutboxProcessor.LEASE_SECONDS)).thenReturn(List.of(outboxId));
+        when(outboxRepository.findAllById(List.of(outboxId))).thenReturn(List.of(outbox));
         when(deliveryRepository.findById(deliveryId)).thenReturn(Optional.of(delivery));
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
 
         processor.processPending();
 
         verify(mockChannel).send(any(), any(), any(), eq("reminder:" + deliveryId));
+    }
+
+    @Test
+    @DisplayName("Lost ownership during markSent -> delivery not marked sent")
+    void lostOwnershipMarkSent() {
+        NotificationOutboxWriter realWriter = new NotificationOutboxWriter(outboxRepository, deliveryRepository);
+        when(outboxRepository.markSentIfOwned(outboxId)).thenReturn(0);
+
+        realWriter.markSent(outbox);
+
+        verify(deliveryRepository, never()).findById(any());
+        verify(deliveryRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Held ownership during markSent -> delivery marked sent")
+    void heldOwnershipMarkSent() {
+        NotificationOutboxWriter realWriter = new NotificationOutboxWriter(outboxRepository, deliveryRepository);
+        when(outboxRepository.markSentIfOwned(outboxId)).thenReturn(1);
+        when(deliveryRepository.findById(deliveryId)).thenReturn(Optional.of(delivery));
+
+        realWriter.markSent(outbox);
+
+        verify(deliveryRepository).save(argThat(d -> "sent".equals(d.getStatus())));
     }
 
     private NotificationOutbox makeOutbox(UUID dvId) {

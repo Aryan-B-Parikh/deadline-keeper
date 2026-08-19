@@ -1,6 +1,10 @@
 package com.deadlinekeeper.security;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.env.Environment;
+import org.springframework.core.env.Profiles;
 import org.springframework.stereotype.Component;
 
 import javax.crypto.Cipher;
@@ -14,19 +18,24 @@ import java.util.Base64;
 @Component
 public class TokenEncryption {
 
+    private static final Logger log = LoggerFactory.getLogger(TokenEncryption.class);
     private static final String ALGORITHM = "AES/GCM/NoPadding";
     private static final int GCM_IV_LENGTH = 12;
     private static final int GCM_TAG_LENGTH = 128;
 
     private final SecretKey secretKey;
 
-    public TokenEncryption(@Value("${app.encryption-key:}") String encodedKey) {
+    public TokenEncryption(@Value("${app.encryption-key:}") String encodedKey,
+                           Environment environment) {
         if (encodedKey == null || encodedKey.isBlank()) {
+            if (environment != null && environment.acceptsProfiles(Profiles.of("prod", "production"))) {
+                throw new IllegalStateException("app.encryption-key (APP_ENCRYPTION_KEY) must be configured in production");
+            }
             try {
                 KeyGenerator keyGen = KeyGenerator.getInstance("AES");
                 keyGen.init(256);
                 this.secretKey = keyGen.generateKey();
-                System.err.println("WARNING: Using auto-generated encryption key. Set app.encryption-key in production!");
+                log.warn("Using auto-generated ephemeral encryption key (dev/test mode). Set APP_ENCRYPTION_KEY in production!");
             } catch (Exception e) {
                 throw new RuntimeException("Failed to generate encryption key", e);
             }

@@ -131,7 +131,10 @@ public class SupabaseJwtAuthenticationFilter extends OncePerRequestFilter {
             log.warn("JWT audience mismatch: expected={}, got={}", expectedAudience, audience);
         }
 
-        if (claims.getExpiration() != null && claims.getExpiration().before(new Date())) {
+        if (claims.getExpiration() == null) {
+            throw new SecurityException("JWT missing required expiration claim");
+        }
+        if (claims.getExpiration().before(new Date())) {
             throw new SecurityException("JWT has expired");
         }
     }

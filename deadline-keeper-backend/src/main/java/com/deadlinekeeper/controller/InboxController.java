@@ -45,7 +45,9 @@ public class InboxController {
             return ResponseEntity.status(401).body(Map.of("error", "Webhook authentication not configured"));
         }
 
-        if (!configuredToken.equals(token)) {
+        byte[] expectedBytes = configuredToken.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        byte[] actualBytes = token.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        if (!java.security.MessageDigest.isEqual(expectedBytes, actualBytes)) {
             log.warn("Invalid webhook token received");
             return ResponseEntity.status(401).body(Map.of("error", "Invalid token"));
         }

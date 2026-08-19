@@ -13,6 +13,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.UUID;
 
 @Component
 public class NotificationOutboxProcessor {
@@ -56,9 +57,9 @@ public class NotificationOutboxProcessor {
 
     @Transactional
     protected List<NotificationOutbox> claimJobs() {
-        int claimed = outboxRepository.claimPendingJobs(50, LEASE_SECONDS);
-        if (claimed == 0) return List.of();
-        return outboxRepository.findByStatusOrderByScheduledAtAsc("processing");
+        List<UUID> claimedIds = outboxRepository.claimPendingJobIds(50, LEASE_SECONDS);
+        if (claimedIds == null || claimedIds.isEmpty()) return List.of();
+        return outboxRepository.findAllById(claimedIds);
     }
 
     protected void sendViaProvider(NotificationOutbox entry) {
