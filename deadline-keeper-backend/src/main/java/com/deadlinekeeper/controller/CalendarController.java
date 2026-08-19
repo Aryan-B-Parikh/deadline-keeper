@@ -44,30 +44,29 @@ public class CalendarController {
     }
 
     @GetMapping("/callback")
+    @org.springframework.transaction.annotation.Transactional
     public ResponseEntity<Map<String, String>> callback(
             @RequestParam("code") String code,
             @RequestParam(value = "state", required = false) String state) {
 
         if (state == null || state.isBlank()) {
-            throw new ValidationException("Missing OAuth state parameter");
+            return ResponseEntity.status(400).body(Map.of("error", "Missing OAuth state parameter"));
         }
 
         CalendarConnection conn = connectionRepository.findByOauthState(state)
-                .orElseThrow(() -> new ValidationException("Invalid OAuth state"));
+                .orElse(null);
 
-        if (conn.getOauthStateExpiresAt() != null && Instant.now().isAfter(conn.getOauthStateExpiresAt())) {
-            conn.setOauthState(null);
-            conn.setOauthStateExpiresAt(null);
-            connectionRepository.save(conn);
-            throw new ValidationException("OAuth state expired");
+        if (conn == null || conn.getOauthStateExpiresAt() == null || Instant.now().isAfter(conn.getOauthStateExpiresAt())) {
+            return ResponseEntity.status(400).body(Map.of("error", "Invalid or expired OAuth state"));
+        }
+
+        // Single-use atomic consumption: prevents replay attacks
+        int consumed = connectionRepository.consumeOauthState(conn.getId(), state);
+        if (consumed == 0) {
+            return ResponseEntity.status(400).body(Map.of("error", "OAuth state already consumed (replay detected)"));
         }
 
         UUID userId = conn.getUserId();
-
-        conn.setOauthState(null);
-        conn.setOauthStateExpiresAt(null);
-        connectionRepository.save(conn);
-
         calendarSyncService.handleCallback(userId, code);
         return ResponseEntity.ok(Map.of("status", "connected"));
     }

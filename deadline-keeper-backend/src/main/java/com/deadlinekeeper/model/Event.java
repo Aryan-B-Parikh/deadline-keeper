@@ -4,13 +4,12 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
-import java.util.List;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.UUID;
 
 @Entity
@@ -33,13 +32,7 @@ public class Event {
     @Column(nullable = false)
     private String type;
 
-    @Column(name = "due_date", nullable = false)
-    private LocalDate dueDate;
-
-    @Column(name = "due_time")
-    private LocalTime dueTime;
-
-    @Column(name = "due_at")
+    @Column(name = "due_at", nullable = false)
     private Instant dueAt;
 
     @Column(nullable = false)
@@ -54,11 +47,8 @@ public class Event {
     @Column(name = "source_file_url")
     private String sourceFileUrl;
 
-    @Column(name = "confidence_score")
-    private Float confidenceScore = 1.0f;
-
     @Column(name = "ai_confidence")
-    private Float aiConfidence;
+    private Float aiConfidence = 1.0f;
 
     @Column(name = "confirmation_status")
     private String confirmationStatus = "system";
@@ -68,11 +58,6 @@ public class Event {
 
     @Column(nullable = false)
     private String status = "upcoming";
-
-    // Kept for backward compatibility with frontend; will be replaced by Reminder entity
-    @JdbcTypeCode(SqlTypes.ARRAY)
-    @Column(name = "reminder_schedule", columnDefinition = "text[]")
-    private List<String> reminderSchedule;
 
     private String notes;
 
@@ -86,10 +71,39 @@ public class Event {
     protected void onCreate() {
         createdAt = Instant.now();
         updatedAt = Instant.now();
+        if (dueAt == null) {
+            dueAt = Instant.now();
+        }
     }
 
     @PreUpdate
     protected void onUpdate() {
         updatedAt = Instant.now();
+    }
+
+    // Helper conversion methods derived from canonical dueAt + timezone
+    @Transient
+    public LocalDate getDueDate() {
+        if (dueAt == null) return null;
+        return dueAt.atZone(getZoneIdSafe()).toLocalDate();
+    }
+
+    @Transient
+    public LocalTime getDueTime() {
+        if (dueAt == null) return null;
+        return dueAt.atZone(getZoneIdSafe()).toLocalTime();
+    }
+
+    @Transient
+    public Float getConfidenceScore() {
+        return aiConfidence != null ? aiConfidence : 1.0f;
+    }
+
+    private ZoneId getZoneIdSafe() {
+        try {
+            return ZoneId.of(timezone != null ? timezone : "UTC");
+        } catch (Exception e) {
+            return ZoneOffset.UTC;
+        }
     }
 }

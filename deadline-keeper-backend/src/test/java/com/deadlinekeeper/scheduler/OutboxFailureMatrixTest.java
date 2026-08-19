@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
@@ -50,7 +51,7 @@ class OutboxFailureMatrixTest {
 
         writer = new NotificationOutboxWriter(outboxRepository, deliveryRepository);
         processor = new NotificationOutboxProcessor(
-                outboxRepository, writer, deliveryRepository, userRepository, List.of(emailChannel));
+                outboxRepository, writer, deliveryRepository, userRepository, List.of(emailChannel), 120, 50, 30);
 
         user = new User();
         user.setId(userId);
@@ -114,14 +115,16 @@ class OutboxFailureMatrixTest {
     }
 
     @Test
-    @DisplayName("Worker crashes during send -> watchdog reclaims expired lease")
+    @DisplayName("Worker crashes during send -> watchdog reclaims expired lease and fails max attempts")
     void watchdogReclaimsExpiredLease() {
-        when(outboxRepository.reclaimExpiredLeases()).thenReturn(5);
+        when(outboxRepository.failExpiredLeasesExceedingMaxAttempts()).thenReturn(2);
+        when(outboxRepository.reclaimExpiredLeasesWithBackoff(30)).thenReturn(3);
 
-        int reclaimed = processor.reclaimExpiredLeases();
+        int totalReclaimed = processor.reclaimExpiredLeases();
 
-        verify(outboxRepository).reclaimExpiredLeases();
-        assert reclaimed == 5;
+        verify(outboxRepository).failExpiredLeasesExceedingMaxAttempts();
+        verify(outboxRepository).reclaimExpiredLeasesWithBackoff(30);
+        assertThat(totalReclaimed).isEqualTo(5);
     }
 
     @Test

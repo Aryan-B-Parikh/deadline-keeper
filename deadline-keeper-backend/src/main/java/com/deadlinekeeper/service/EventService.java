@@ -52,22 +52,20 @@ public class EventService {
         event.setUserId(userId);
         event.setTitle(request.getTitle());
         event.setType(request.getType());
-        event.setDueDate(request.getDueDate());
-        event.setDueTime(request.getDueTime());
 
         String timezone = request.getTimezone() != null ? request.getTimezone() : "UTC";
         event.setTimezone(timezone);
         event.setDueAt(computeDueAt(request.getDueDate(), request.getDueTime(), timezone));
 
         event.setSource("manual");
-        event.setConfidenceScore(1.0f);
+        event.setAiConfidence(1.0f);
         event.setStatus(deadlineStatusService.computeStatus(event.getDueAt()));
-        event.setReminderSchedule(request.getReminderSchedule() != null
-                ? request.getReminderSchedule() : List.of("7d", "1d", "2h"));
         event.setNotes(request.getNotes());
 
         Event saved = eventRepository.save(event);
-        reminderService.syncReminders(saved, saved.getReminderSchedule());
+        List<String> schedule = request.getReminderSchedule() != null
+                ? request.getReminderSchedule() : List.of("7d", "1d", "2h");
+        reminderService.syncReminders(saved, schedule);
         return toResponse(saved);
     }
 
@@ -77,10 +75,7 @@ public class EventService {
 
         event.setTitle(request.getTitle());
         event.setType(request.getType());
-        event.setDueDate(request.getDueDate());
-        event.setDueTime(request.getDueTime());
         if (request.getTimezone() != null) event.setTimezone(request.getTimezone());
-        if (request.getReminderSchedule() != null) event.setReminderSchedule(request.getReminderSchedule());
         event.setNotes(request.getNotes());
 
         event.setDueAt(computeDueAt(request.getDueDate(), request.getDueTime(), event.getTimezone()));
@@ -90,7 +85,9 @@ public class EventService {
         }
 
         Event saved = eventRepository.save(event);
-        reminderService.syncReminders(saved, saved.getReminderSchedule());
+        if (request.getReminderSchedule() != null) {
+            reminderService.syncReminders(saved, request.getReminderSchedule());
+        }
         return toResponse(saved);
     }
 
@@ -112,17 +109,11 @@ public class EventService {
                 .orElseThrow(() -> new ResourceNotFoundException("Event", eventId.toString()));
 
         Duration snoozeDuration = parseDuration(duration);
-
         Instant newDueAt = event.getDueAt().plus(snoozeDuration);
         event.setDueAt(newDueAt);
-
-        ZoneId zone = ZoneId.of(event.getTimezone());
-        event.setDueDate(newDueAt.atZone(zone).toLocalDate());
-        event.setDueTime(newDueAt.atZone(zone).toLocalTime());
-
         event.setStatus(deadlineStatusService.computeStatus(newDueAt, event.getStatus()));
+
         Event saved = eventRepository.save(event);
-        reminderService.syncReminders(saved, saved.getReminderSchedule());
         return toResponse(saved);
     }
 
@@ -172,9 +163,8 @@ public class EventService {
                 .dueTime(dueTime)
                 .timezone(event.getTimezone())
                 .source(event.getSource())
-                .confidenceScore(event.getConfidenceScore())
+                .confidenceScore(event.getAiConfidence() != null ? event.getAiConfidence() : 1.0f)
                 .status(event.getStatus())
-                .reminderSchedule(event.getReminderSchedule())
                 .notes(event.getNotes())
                 .sourceFileUrl(event.getSourceFileUrl())
                 .createdAt(event.getCreatedAt())

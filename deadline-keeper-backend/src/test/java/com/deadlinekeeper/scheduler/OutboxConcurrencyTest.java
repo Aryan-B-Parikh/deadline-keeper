@@ -127,7 +127,7 @@ class OutboxConcurrencyTest {
                 try {
                     startLatch.await();
                     NotificationOutboxProcessor workerProcessor = new NotificationOutboxProcessor(
-                            outboxRepository, writer, deliveryRepository, userRepository, List.of(emailChannel));
+                            outboxRepository, writer, deliveryRepository, userRepository, List.of(emailChannel), 120, 50, 30);
 
                     while (!pendingQueue.isEmpty()) {
                         workerProcessor.processPending();

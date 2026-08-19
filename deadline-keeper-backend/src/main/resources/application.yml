@@ -31,8 +31,20 @@ spring:
       max-file-size: 10MB
       max-request-size: 10MB
 
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+
 server:
   port: 8080
+  shutdown: graceful
+
+# Outbox & Notification Worker Tuning
+outbox:
+  lease-seconds: ${OUTBOX_LEASE_SECONDS:120}
+  claim-limit: ${OUTBOX_CLAIM_LIMIT:50}
+  retry-base-seconds: ${OUTBOX_RETRY_BASE_SECONDS:30}
+  retry-max-seconds: ${OUTBOX_RETRY_MAX_SECONDS:600}
+
 
 # Supabase
 supabase:

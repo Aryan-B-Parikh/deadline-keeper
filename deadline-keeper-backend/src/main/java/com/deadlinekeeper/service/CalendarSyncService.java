@@ -56,19 +56,22 @@ public class CalendarSyncService {
     private final EventRepository eventRepository;
     private final DeadlineStatusService statusService;
     private final TokenEncryption tokenEncryption;
+    private final ReminderService reminderService;
 
     public CalendarSyncService(GoogleCalendarConfig config,
                                CalendarConnectionRepository connectionRepository,
                                ExternalEventRepository externalEventRepository,
                                EventRepository eventRepository,
                                DeadlineStatusService statusService,
-                               TokenEncryption tokenEncryption) {
+                               TokenEncryption tokenEncryption,
+                               ReminderService reminderService) {
         this.config = config;
         this.connectionRepository = connectionRepository;
         this.externalEventRepository = externalEventRepository;
         this.eventRepository = eventRepository;
         this.statusService = statusService;
         this.tokenEncryption = tokenEncryption;
+        this.reminderService = reminderService;
     }
 
     public String getAuthorizationUrl(String state) {
@@ -269,19 +272,16 @@ public class CalendarSyncService {
         event.setTitle(googleEvent.getSummary());
         event.setType(type);
         event.setDueAt(dueAt);
-        event.setDueDate(dueAt.atZone(zone).toLocalDate());
-        event.setDueTime(dueAt.atZone(zone).toLocalTime());
         event.setTimezone(tz);
         event.setSource("calendar_sync");
         event.setSourceReference("calendar:" + externalId);
         event.setAiConfidence(0.8f);
-        event.setConfidenceScore(0.8f);
-        event.setConfirmationStatus("auto_imported");
+        event.setConfirmationStatus("system");
         event.setUserConfirmed(false);
         event.setStatus(statusService.computeStatus(dueAt));
-        event.setReminderSchedule(List.of("1d", "2h"));
         event.setNotes(googleEvent.getDescription());
         Event saved = eventRepository.save(event);
+        reminderService.syncReminders(saved, List.of("1d", "2h"));
 
         ExternalEvent extEvent = new ExternalEvent();
         extEvent.setDeadlineId(saved.getId());
@@ -348,14 +348,6 @@ public class CalendarSyncService {
         Instant newDueAt = parseGoogleEventDateTime(googleEvent);
         if (newDueAt != null) {
             event.setDueAt(newDueAt);
-            ZoneId zone;
-            try {
-                zone = ZoneId.of(event.getTimezone());
-            } catch (Exception e) {
-                zone = ZoneOffset.UTC;
-            }
-            event.setDueDate(newDueAt.atZone(zone).toLocalDate());
-            event.setDueTime(newDueAt.atZone(zone).toLocalTime());
             event.setStatus(statusService.computeStatus(newDueAt, event.getStatus()));
         }
         if (googleEvent.getSummary() != null) event.setTitle(googleEvent.getSummary());

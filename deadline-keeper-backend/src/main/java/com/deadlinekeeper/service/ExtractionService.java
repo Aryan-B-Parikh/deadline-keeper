@@ -87,8 +87,6 @@ public class ExtractionService {
             event.setTitle(confirmed.getTitle());
             event.setType(confirmed.getType() != null ? confirmed.getType() : "other");
             event.setDueAt(dueAt);
-            event.setDueDate(confirmed.getDueDate());
-            event.setDueTime(confirmed.getDueTime());
             event.setTimezone(tz);
             event.setSource(request.getSourceType() != null ? request.getSourceType() : "pasted_text");
 
@@ -104,16 +102,15 @@ public class ExtractionService {
             }
             event.setSourceFileUrl(sourceUrl);
             event.setAiConfidence(1.0f);
-            event.setConfidenceScore(1.0f);
             event.setConfirmationStatus("user_confirmed");
             event.setUserConfirmed(true);
             event.setStatus(deadlineStatusService.computeStatus(dueAt));
-            event.setReminderSchedule(confirmed.getReminderSchedule() != null
-                    ? confirmed.getReminderSchedule() : List.of("7d", "1d", "2h"));
             event.setNotes(confirmed.getNotes());
 
             Event saved = eventRepository.save(event);
-            reminderService.syncReminders(saved, saved.getReminderSchedule());
+            List<String> schedule = confirmed.getReminderSchedule() != null
+                    ? confirmed.getReminderSchedule() : List.of("7d", "1d", "2h");
+            reminderService.syncReminders(saved, schedule);
             responses.add(toResponse(saved));
         }
 
@@ -216,9 +213,8 @@ public class ExtractionService {
                 .dueTime(dueTime)
                 .timezone(event.getTimezone())
                 .source(event.getSource())
-                .confidenceScore(event.getConfidenceScore())
+                .confidenceScore(event.getAiConfidence() != null ? event.getAiConfidence() : 1.0f)
                 .status(event.getStatus())
-                .reminderSchedule(event.getReminderSchedule())
                 .notes(event.getNotes())
                 .sourceFileUrl(event.getSourceFileUrl())
                 .createdAt(event.getCreatedAt())

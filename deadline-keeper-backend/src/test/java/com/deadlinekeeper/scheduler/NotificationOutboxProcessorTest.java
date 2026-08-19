@@ -50,7 +50,7 @@ class NotificationOutboxProcessorTest {
         when(mockChannel.getChannelName()).thenReturn("email");
 
         processor = new NotificationOutboxProcessor(
-                outboxRepository, writer, deliveryRepository, userRepository, List.of(mockChannel));
+                outboxRepository, writer, deliveryRepository, userRepository, List.of(mockChannel), 120, 50, 30);
 
         user = new User();
         user.setId(userId);
@@ -77,7 +77,7 @@ class NotificationOutboxProcessorTest {
     @Test
     @DisplayName("Provider succeeds -> markSent called")
     void providerSucceeds() {
-        when(outboxRepository.claimPendingJobIds(50, NotificationOutboxProcessor.LEASE_SECONDS)).thenReturn(List.of(outboxId));
+        when(outboxRepository.claimPendingJobIds(50, 120L)).thenReturn(List.of(outboxId));
         when(outboxRepository.findAllById(List.of(outboxId))).thenReturn(List.of(outbox));
         when(deliveryRepository.findById(deliveryId)).thenReturn(Optional.of(delivery));
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
@@ -92,7 +92,7 @@ class NotificationOutboxProcessorTest {
     @Test
     @DisplayName("Provider fails -> handleProviderFailure called")
     void providerFails() {
-        when(outboxRepository.claimPendingJobIds(50, NotificationOutboxProcessor.LEASE_SECONDS)).thenReturn(List.of(outboxId));
+        when(outboxRepository.claimPendingJobIds(50, 120L)).thenReturn(List.of(outboxId));
         when(outboxRepository.findAllById(List.of(outboxId))).thenReturn(List.of(outbox));
         when(deliveryRepository.findById(deliveryId)).thenReturn(Optional.of(delivery));
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
@@ -157,7 +157,7 @@ class NotificationOutboxProcessorTest {
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
 
         processor = new NotificationOutboxProcessor(
-                outboxRepository, writer, deliveryRepository, userRepository, List.of());
+                outboxRepository, writer, deliveryRepository, userRepository, List.of(), 120, 50, 30);
 
         processor.sendViaProvider(outbox);
 
@@ -167,7 +167,7 @@ class NotificationOutboxProcessorTest {
     @Test
     @DisplayName("No claimed jobs -> no provider calls")
     void noClaimedJobs() {
-        when(outboxRepository.claimPendingJobIds(50, NotificationOutboxProcessor.LEASE_SECONDS)).thenReturn(List.of());
+        when(outboxRepository.claimPendingJobIds(50, 120L)).thenReturn(List.of());
 
         processor.processPending();
 
@@ -193,7 +193,7 @@ class NotificationOutboxProcessorTest {
         NotificationOutbox o3 = makeOutbox(dv3);
 
         List<UUID> claimedIds = List.of(o1.getId(), o2.getId(), o3.getId());
-        when(outboxRepository.claimPendingJobIds(50, NotificationOutboxProcessor.LEASE_SECONDS)).thenReturn(claimedIds);
+        when(outboxRepository.claimPendingJobIds(50, 120L)).thenReturn(claimedIds);
         when(outboxRepository.findAllById(claimedIds)).thenReturn(List.of(o1, o2, o3));
         when(deliveryRepository.findById(dv1)).thenReturn(Optional.of(d1));
         when(deliveryRepository.findById(dv2)).thenReturn(Optional.of(d2));
@@ -209,7 +209,8 @@ class NotificationOutboxProcessorTest {
     @Test
     @DisplayName("Watchdog reclaims expired leases")
     void watchdogReclaim() {
-        when(outboxRepository.reclaimExpiredLeases()).thenReturn(2);
+        when(outboxRepository.failExpiredLeasesExceedingMaxAttempts()).thenReturn(1);
+        when(outboxRepository.reclaimExpiredLeasesWithBackoff(30)).thenReturn(1);
 
         int reclaimed = processor.reclaimExpiredLeases();
 
@@ -219,7 +220,7 @@ class NotificationOutboxProcessorTest {
     @Test
     @DisplayName("Provider receives idempotency key")
     void providerGetsIdempotencyKey() {
-        when(outboxRepository.claimPendingJobIds(50, NotificationOutboxProcessor.LEASE_SECONDS)).thenReturn(List.of(outboxId));
+        when(outboxRepository.claimPendingJobIds(50, 120L)).thenReturn(List.of(outboxId));
         when(outboxRepository.findAllById(List.of(outboxId))).thenReturn(List.of(outbox));
         when(deliveryRepository.findById(deliveryId)).thenReturn(Optional.of(delivery));
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));

@@ -28,16 +28,26 @@ public class NotificationOutboxProcessor {
     private final UserRepository userRepository;
     private final List<NotificationChannel> channels;
 
+    private final long leaseSeconds;
+    private final int claimLimit;
+    private final long retryBaseSeconds;
+
     public NotificationOutboxProcessor(NotificationOutboxRepository outboxRepository,
                                        NotificationOutboxWriter writer,
                                        ReminderDeliveryRepository deliveryRepository,
                                        UserRepository userRepository,
-                                       List<NotificationChannel> channels) {
+                                       List<NotificationChannel> channels,
+                                       @org.springframework.beans.factory.annotation.Value("${outbox.lease-seconds:120}") long leaseSeconds,
+                                       @org.springframework.beans.factory.annotation.Value("${outbox.claim-limit:50}") int claimLimit,
+                                       @org.springframework.beans.factory.annotation.Value("${outbox.retry-base-seconds:30}") long retryBaseSeconds) {
         this.outboxRepository = outboxRepository;
         this.writer = writer;
         this.deliveryRepository = deliveryRepository;
         this.userRepository = userRepository;
         this.channels = channels;
+        this.leaseSeconds = leaseSeconds;
+        this.claimLimit = claimLimit;
+        this.retryBaseSeconds = retryBaseSeconds;
     }
 
     public void processPending() {
@@ -57,7 +67,7 @@ public class NotificationOutboxProcessor {
 
     @Transactional
     protected List<NotificationOutbox> claimJobs() {
-        List<UUID> claimedIds = outboxRepository.claimPendingJobIds(50, LEASE_SECONDS);
+        List<UUID> claimedIds = outboxRepository.claimPendingJobIds(claimLimit, leaseSeconds);
         if (claimedIds == null || claimedIds.isEmpty()) return List.of();
         return outboxRepository.findAllById(claimedIds);
     }
@@ -101,6 +111,14 @@ public class NotificationOutboxProcessor {
 
     @Transactional
     public int reclaimExpiredLeases() {
-        return outboxRepository.reclaimExpiredLeases();
+        int failed = outboxRepository.failExpiredLeasesExceedingMaxAttempts();
+        int reclaimed = outboxRepository.reclaimExpiredLeasesWithBackoff(retryBaseSeconds);
+        if (failed > 0) {
+            log.info("Watchdog marked {} expired leases as permanently FAILED (max attempts exceeded)", failed);
+        }
+        if (reclaimed > 0) {
+            log.warn("Watchdog reclaimed {} expired leases for retry", reclaimed);
+        }
+        return failed + reclaimed;
     }
 }

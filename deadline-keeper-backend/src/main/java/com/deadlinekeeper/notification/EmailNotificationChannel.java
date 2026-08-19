@@ -37,11 +37,13 @@ public class EmailNotificationChannel implements NotificationChannel {
             Content content = new Content("text/html", buildHtmlContent(title, message));
             Mail mail = new Mail(from, title, to, content);
 
-            // Provider-side idempotency: SendGrid custom_args lets the provider
-            // deduplicate within a time window. If key is provided, duplicate sends
-            // with the same key produce only one email.
+            // Attach deterministic delivery identity as correlation and telemetry metadata.
+            // Note: SendGrid custom_args provides tracking and webhook event reconciliation.
+            // Authoritative at-least-once delivery with crash recovery is guaranteed by the
+            // PostgreSQL notification_outbox table (atomic SKIP LOCKED claim and leased transitions).
             if (idempotencyKey != null) {
                 mail.addCustomArg("idempotency_key", idempotencyKey);
+                mail.addCustomArg("delivery_id", idempotencyKey.replace("reminder:", ""));
             }
 
             Request request = new Request();

@@ -88,9 +88,38 @@ public interface NotificationOutboxRepository extends JpaRepository<Notification
                           @Param("error") String error);
 
     /**
-     * Reclaim expired processing rows: reset to 'pending' if lease has expired.
-     * Used by the watchdog to recover from worker crashes.
+     * Reclaim expired processing rows whose attempt_count >= max_attempts by transitioning to 'failed'.
      */
+    @Modifying
+    @Query(value = """
+            UPDATE notification_outbox
+            SET status = 'failed',
+                last_error = 'Lease expired (worker crash) - max attempts exceeded',
+                lease_until = NULL,
+                processing_started_at = NULL
+            WHERE status = 'processing'
+              AND lease_until < NOW()
+              AND attempt_count >= max_attempts
+            """, nativeQuery = true)
+    int failExpiredLeasesExceedingMaxAttempts();
+
+    /**
+     * Reclaim expired processing rows with remaining attempts by resetting to 'pending' with backoff.
+     */
+    @Modifying
+    @Query(value = """
+            UPDATE notification_outbox
+            SET status = 'pending',
+                processing_started_at = NULL,
+                lease_until = NULL,
+                last_error = 'Lease expired (worker crash)',
+                next_retry_at = NOW() + (:backoffSeconds || ' seconds')::interval
+            WHERE status = 'processing'
+              AND lease_until < NOW()
+              AND attempt_count < max_attempts
+            """, nativeQuery = true)
+    int reclaimExpiredLeasesWithBackoff(@Param("backoffSeconds") long backoffSeconds);
+
     @Modifying
     @Query(value = """
             UPDATE notification_outbox
