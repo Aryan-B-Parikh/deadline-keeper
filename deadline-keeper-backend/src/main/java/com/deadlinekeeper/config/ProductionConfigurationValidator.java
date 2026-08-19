@@ -24,7 +24,6 @@ public class ProductionConfigurationValidator {
         require("APP_ENCRYPTION_KEY");
         require("SENDGRID_API_KEY");
         require("SENDGRID_FROM_EMAIL");
-        require("SENDGRID_WEBHOOK_TOKEN");
         require("GOOGLE_CALENDAR_CLIENT_ID");
         require("GOOGLE_CALENDAR_CLIENT_SECRET");
 
@@ -48,7 +47,6 @@ public class ProductionConfigurationValidator {
             case "APP_ENCRYPTION_KEY" -> environment.getProperty("app.encryption-key");
             case "SENDGRID_API_KEY" -> environment.getProperty("sendgrid.api-key");
             case "SENDGRID_FROM_EMAIL" -> environment.getProperty("sendgrid.from-email");
-            case "SENDGRID_WEBHOOK_TOKEN" -> environment.getProperty("sendgrid.webhook-token");
             case "GOOGLE_CALENDAR_CLIENT_ID" -> environment.getProperty("google.calendar.client-id");
             case "GOOGLE_CALENDAR_CLIENT_SECRET" -> environment.getProperty("google.calendar.client-secret");
             default -> null;
