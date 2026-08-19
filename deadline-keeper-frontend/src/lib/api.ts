@@ -60,28 +60,15 @@ async function uploadRequest<T>(path: string, formData: FormData): Promise<T> {
 }
 
 export const eventApi = {
-  list: (status?: string) =>
-    request<Event[]>(`/api/events${status ? `?status=${encodeURIComponent(status)}` : ''}`),
+  list: (status?: string) => request<Event[]>(`/api/events${status ? `?status=${encodeURIComponent(status)}` : ''}`),
   get: (id: string) => request<Event>(`/api/events/${id}`),
-  create: (data: CreateEventInput) => request<Event>('/api/events', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  }),
-  update: (id: string, data: CreateEventInput) => request<Event>(`/api/events/${id}`, {
-    method: 'PUT',
-    body: JSON.stringify(data),
-  }),
+  create: (data: CreateEventInput) => request<Event>('/api/events', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: CreateEventInput) => request<Event>(`/api/events/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id: string) => request<void>(`/api/events/${id}`, { method: 'DELETE' }),
   markDone: (id: string) => request<Event>(`/api/events/${id}/done`, { method: 'POST' }),
-  snooze: (id: string, duration: string) => request<Event>(`/api/events/${id}/snooze`, {
-    method: 'POST',
-    body: JSON.stringify({ duration }),
-  }),
+  snooze: (id: string, duration: string) => request<Event>(`/api/events/${id}/snooze`, { method: 'POST', body: JSON.stringify({ duration }) }),
   extract: (formData: FormData) => uploadRequest<ExtractionResult>('/api/events/extract', formData),
-  confirmExtract: (data: ExtractConfirmInput) => request<Event[]>('/api/events/extract/confirm', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  }),
+  confirmExtract: (data: ExtractConfirmInput) => request<Event[]>('/api/events/extract/confirm', { method: 'POST', body: JSON.stringify(data) }),
 };
 
 export const notificationApi = {
@@ -92,10 +79,8 @@ export const notificationApi = {
 
 export const userApi = {
   getProfile: () => request<UserProfile>('/api/user/profile'),
-  updateProfile: (data: UpdateProfileInput) => request<UserProfile>('/api/user/profile', {
-    method: 'PUT',
-    body: JSON.stringify(data),
-  }),
+  updateProfile: (data: UpdateProfileInput) => request<UserProfile>('/api/user/profile', { method: 'PUT', body: JSON.stringify(data) }),
+  getForwardingAddress: () => request<ForwardingAddress>('/api/user/profile/forwarding-token'),
 };
 
 export const calendarApi = {
@@ -189,6 +174,11 @@ export interface UserProfile {
     channels?: string[];
     default_offsets?: string[];
   };
+}
+
+export interface ForwardingAddress {
+  token: string;
+  address: string;
 }
 
 export interface UpdateProfileInput {
