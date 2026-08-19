@@ -33,7 +33,6 @@ import static org.mockito.Mockito.when;
 @SpringBootTest
 @Testcontainers
 @TestPropertySource(properties = {
-        "spring.task.scheduling.pool.size=0",
         "outbox.lease-seconds=120",
         "outbox.claim-limit=50",
         "outbox.retry-base-seconds=30"
@@ -54,27 +53,22 @@ class OutboxPostgresIntegrationTest {
         registry.add("spring.flyway.enabled", () -> "true");
     }
 
-    @org.springframework.boot.test.mock.mockito.SpyBean
+    @Autowired
     private NotificationOutboxRepository outboxRepository;
     @Autowired private ReminderDeliveryRepository deliveryRepository;
     @Autowired private EventRepository eventRepository;
     @Autowired private ReminderRepository reminderRepository;
     @Autowired private UserRepository userRepository;
     @Autowired private NotificationOutboxWriter writer;
+    @MockBean private com.deadlinekeeper.notification.EmailNotificationChannel emailChannel;
 
-    @MockBean private NotificationChannel emailChannel;
-
-    private NotificationOutboxProcessor processor;
+    @org.springframework.boot.test.mock.mockito.SpyBean private NotificationOutboxProcessor processor;
     private User testUser;
     private Event testEvent;
 
     @BeforeEach
     void setUp() {
         when(emailChannel.getChannelName()).thenReturn("email");
-
-        processor = new NotificationOutboxProcessor(
-                outboxRepository, writer, deliveryRepository, userRepository,
-                List.of(emailChannel), new OutboxRetryPolicy(30, 600), 120, 50);
 
         outboxRepository.deleteAll();
         deliveryRepository.deleteAll();
@@ -92,7 +86,7 @@ class OutboxPostgresIntegrationTest {
         testEvent = new Event();
         testEvent.setUserId(testUser.getId());
         testEvent.setTitle("Final Project Submission");
-        testEvent.setType("assignment");
+        testEvent.setType("submission");
         testEvent.setDueAt(Instant.now().plusSeconds(86400));
         testEvent.setTimezone("UTC");
         testEvent.setSource("manual");
@@ -141,14 +135,14 @@ class OutboxPostgresIntegrationTest {
 
         doAnswer(invocation -> {
             @SuppressWarnings("unchecked")
-            List<UUID> claimedIds = (List<UUID>) invocation.callRealMethod();
+            List<NotificationOutbox> claimedJobs = (List<NotificationOutbox>) invocation.callRealMethod();
             
-            for (UUID id : claimedIds) {
-                claimCountPerId.merge(id, 1, Integer::sum);
+            for (NotificationOutbox outbox : claimedJobs) {
+                claimCountPerId.merge(outbox.getId(), 1, Integer::sum);
                 totalClaimsReturned.incrementAndGet();
             }
-            return claimedIds;
-        }).when(outboxRepository).claimPendingJobIds(anyInt(), anyLong());
+            return claimedJobs;
+        }).when(processor).claimJobs();
 
         AtomicInteger totalSends = new AtomicInteger(0);
         doAnswer(invocation -> {
@@ -168,7 +162,7 @@ class OutboxPostgresIntegrationTest {
                         processor.processPending();
                     }
                 } catch (Exception e) {
-                    e.printStackTrace();
+                    throw new RuntimeException(e);
                 } finally {
                     doneLatch.countDown();
                 }
@@ -206,7 +200,8 @@ class OutboxPostgresIntegrationTest {
         delivery.setEventId(testEvent.getId());
         delivery.setReminderId(reminder.getId());
         delivery.setChannel("email");
-        delivery.setStatus("processing");
+        delivery.setStatus("pending");
+        delivery.setScheduledAt(Instant.now());
         delivery = deliveryRepository.save(delivery);
 
         NotificationOutbox outbox = new NotificationOutbox();
@@ -245,7 +240,8 @@ class OutboxPostgresIntegrationTest {
         delivery.setEventId(testEvent.getId());
         delivery.setReminderId(reminder.getId());
         delivery.setChannel("email");
-        delivery.setStatus("processing");
+        delivery.setStatus("pending");
+        delivery.setScheduledAt(Instant.now());
         delivery = deliveryRepository.save(delivery);
 
         NotificationOutbox outbox = new NotificationOutbox();
@@ -287,7 +283,8 @@ class OutboxPostgresIntegrationTest {
         delivery.setEventId(testEvent.getId());
         delivery.setReminderId(reminder.getId());
         delivery.setChannel("email");
-        delivery.setStatus("processing");
+        delivery.setStatus("pending");
+        delivery.setScheduledAt(Instant.now());
         delivery = deliveryRepository.save(delivery);
 
         NotificationOutbox outbox = new NotificationOutbox();
@@ -324,7 +321,8 @@ class OutboxPostgresIntegrationTest {
         delivery.setEventId(testEvent.getId());
         delivery.setReminderId(reminder.getId());
         delivery.setChannel("email");
-        delivery.setStatus("processing");
+        delivery.setStatus("pending");
+        delivery.setScheduledAt(Instant.now());
         delivery = deliveryRepository.save(delivery);
 
         NotificationOutbox outbox = new NotificationOutbox();
@@ -349,6 +347,6 @@ class OutboxPostgresIntegrationTest {
 
         // Verify delivery status was not altered to sent
         ReminderDelivery refreshedDelivery = deliveryRepository.findById(delivery.getId()).orElseThrow();
-        assertThat(refreshedDelivery.getStatus()).isEqualTo("processing");
+        assertThat(refreshedDelivery.getStatus()).isEqualTo("pending");
     }
 }

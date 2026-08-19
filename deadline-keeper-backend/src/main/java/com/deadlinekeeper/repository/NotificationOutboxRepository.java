@@ -11,8 +11,10 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.transaction.annotation.Transactional;
 
 @Repository
+@Transactional
 public interface NotificationOutboxRepository extends JpaRepository<NotificationOutbox, UUID> {
 
     /**
