@@ -35,10 +35,6 @@ ALTER TABLE events DROP COLUMN IF EXISTS confidence_score;
 ALTER TABLE events DROP COLUMN IF EXISTS due_date;
 ALTER TABLE events DROP COLUMN IF EXISTS due_time;
 
--- Step 6: Ensure notification_outbox idempotency_key is globally unique
-CREATE UNIQUE INDEX IF NOT EXISTS uq_notification_outbox_idempotency_key 
-    ON notification_outbox(idempotency_key);
-
 -- Ensure 1:1 delivery to outbox invariant
 CREATE UNIQUE INDEX IF NOT EXISTS uq_notification_outbox_delivery_id 
     ON notification_outbox(delivery_id) 
@@ -102,5 +98,11 @@ BEGIN
         ALTER TABLE reminder_deliveries 
             ADD CONSTRAINT chk_reminder_deliveries_status 
             CHECK (status IN ('pending', 'processing', 'sent', 'failed', 'cancelled'));
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_reminders_channel') THEN
+        ALTER TABLE reminders 
+            ADD CONSTRAINT chk_reminders_channel 
+            CHECK (channel IN ('email', 'in_app', 'sms'));
     END IF;
 END $$;

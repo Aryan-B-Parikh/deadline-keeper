@@ -145,8 +145,22 @@ class OutboxPostgresIntegrationTest {
         }
 
         AtomicInteger totalSends = new AtomicInteger(0);
+        ConcurrentHashMap<String, AtomicInteger> activeClaims = new ConcurrentHashMap<>();
+        ConcurrentHashMap<String, Integer> maxActiveClaims = new ConcurrentHashMap<>();
 
         doAnswer(invocation -> {
+            String key = invocation.getArgument(3);
+            AtomicInteger claims = activeClaims.computeIfAbsent(key, k -> new AtomicInteger(0));
+            int current = claims.incrementAndGet();
+            maxActiveClaims.merge(key, current, Math::max);
+            
+            try {
+                // Simulate some work to increase the chance of overlap if a concurrency bug exists
+                Thread.sleep(5);
+            } finally {
+                claims.decrementAndGet();
+            }
+
             totalSends.incrementAndGet();
             return null;
         }).when(emailChannel).send(any(), any(), any(), any());
@@ -178,6 +192,13 @@ class OutboxPostgresIntegrationTest {
         assertThat(totalSends.get()).isGreaterThanOrEqualTo(totalJobs);
         assertThat(outboxRepository.countByStatus("sent")).isEqualTo(totalJobs);
         assertThat(outboxRepository.countByStatus("pending")).isEqualTo(0);
+
+        assertThat(maxActiveClaims.size()).isEqualTo(totalJobs);
+        for (Map.Entry<String, Integer> entry : maxActiveClaims.entrySet()) {
+            assertThat(entry.getValue())
+                .as("Job %s should have a max of 1 simultaneous owner", entry.getKey())
+                .isEqualTo(1);
+        }
     }
 
     @Test
