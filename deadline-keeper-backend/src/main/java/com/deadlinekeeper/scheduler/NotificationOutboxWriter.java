@@ -7,14 +7,12 @@ import com.deadlinekeeper.repository.ReminderDeliveryRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.UUID;
 
 @Service
 public class NotificationOutboxWriter {
-
     private static final Logger log = LoggerFactory.getLogger(NotificationOutboxWriter.class);
 
     private final NotificationOutboxRepository outboxRepository;
@@ -29,26 +27,21 @@ public class NotificationOutboxWriter {
         this.retryPolicy = retryPolicy;
     }
 
-    @Transactional
+    /**
+     * The outbox transition commits independently from delivery bookkeeping.
+     * If delivery persistence fails after a successful provider call, the outbox remains SENT
+     * instead of rolling back to PROCESSING and immediately creating another provider attempt.
+     */
     public void markSent(NotificationOutbox entry) {
         int updated = outboxRepository.markSentIfOwned(entry.getId());
         if (updated == 0) {
             log.warn("Lost ownership of outbox {} (lease expired or reclaimed) - skipping markSent", entry.getId());
             return;
         }
-
-        if (entry.getDeliveryId() != null) {
-            deliveryRepository.findById(entry.getDeliveryId()).ifPresent(delivery -> {
-                delivery.setStatus("sent");
-                delivery.setSentAt(Instant.now());
-                deliveryRepository.save(delivery);
-            });
-        }
-        log.debug("Delivered outbox {} via {} -> delivery {} SENT",
-                entry.getId(), entry.getChannel(), entry.getDeliveryId());
+        markDeliverySent(entry.getDeliveryId());
+        log.debug("Delivered outbox {} via {} -> delivery {} SENT", entry.getId(), entry.getChannel(), entry.getDeliveryId());
     }
 
-    @Transactional
     public void handleProviderFailure(NotificationOutbox entry, String error) {
         NotificationOutbox outbox = outboxRepository.findById(entry.getId()).orElse(null);
         if (outbox == null) return;
@@ -58,21 +51,17 @@ public class NotificationOutboxWriter {
             if (updated > 0) {
                 markDeliveryFailed(outbox.getDeliveryId(), error);
                 log.info("Outbox {} reached max attempts -> FAILED", entry.getId());
-            } else {
-                log.warn("Lost ownership of outbox {} - skipping markFailed", entry.getId());
             }
-        } else {
-            Instant nextRetry = retryPolicy.calculateNextRetry(outbox.getAttemptCount());
-            int updated = outboxRepository.markRetryIfOwned(entry.getId(), nextRetry, error);
-            if (updated == 0) {
-                log.warn("Lost ownership of outbox {} - skipping markRetry", entry.getId());
-            } else {
-                log.debug("Outbox {} scheduled for retry at {}", entry.getId(), nextRetry);
-            }
+            return;
+        }
+
+        Instant nextRetry = retryPolicy.calculateNextRetry(outbox.getAttemptCount());
+        int updated = outboxRepository.markRetryIfOwned(entry.getId(), nextRetry, error);
+        if (updated == 0) {
+            log.warn("Lost ownership of outbox {} - skipping markRetry", entry.getId());
         }
     }
 
-    @Transactional
     public void failPermanently(NotificationOutbox entry, String error) {
         int updated = outboxRepository.markFailedIfOwned(entry.getId(), error);
         if (updated > 0) {
@@ -83,13 +72,21 @@ public class NotificationOutboxWriter {
         }
     }
 
+    private void markDeliverySent(UUID deliveryId) {
+        if (deliveryId == null) return;
+        deliveryRepository.findById(deliveryId).ifPresent(delivery -> {
+            delivery.setStatus("sent");
+            delivery.setSentAt(Instant.now());
+            deliveryRepository.save(delivery);
+        });
+    }
+
     private void markDeliveryFailed(UUID deliveryId, String error) {
         if (deliveryId == null) return;
-        deliveryRepository.findById(deliveryId).ifPresent(d -> {
-            d.setStatus("failed");
-            d.setLastError(error);
-            deliveryRepository.save(d);
+        deliveryRepository.findById(deliveryId).ifPresent(delivery -> {
+            delivery.setStatus("failed");
+            delivery.setLastError(error);
+            deliveryRepository.save(delivery);
         });
     }
 }
-
