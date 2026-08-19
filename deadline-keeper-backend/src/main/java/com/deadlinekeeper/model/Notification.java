@@ -37,6 +37,9 @@ public class Notification {
     @Column(nullable = false)
     private String channel = "in_app";
 
+    @Column(name = "idempotency_key", nullable = false, unique = true)
+    private String idempotencyKey;
+
     @Column(name = "created_at", updatable = false)
     private Instant createdAt;
 
