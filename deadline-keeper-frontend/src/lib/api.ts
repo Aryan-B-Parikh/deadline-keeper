@@ -120,6 +120,18 @@ export const calendarApi = {
 };
 
 // Types
+export interface Reminder {
+  id: string;
+  offsetSeconds: number;
+  channel: string;
+  enabled: boolean;
+}
+
+export interface ReminderInput {
+  offsetSeconds: number;
+  channel: string;
+}
+
 export interface Event {
   id: string;
   title: string;
@@ -129,7 +141,7 @@ export interface Event {
   source: string;
   aiConfidence: number;
   status: string;
-  reminderSchedule: string[];
+  reminders: Reminder[];
   notes: string | null;
   sourceFileUrl: string | null;
   createdAt: string;
@@ -141,7 +153,7 @@ export interface CreateEventInput {
   type: string;
   dueAt: string;
   timezone?: string;
-  reminderSchedule?: string[];
+  reminders?: ReminderInput[];
   notes?: string | null;
 }
 
@@ -166,7 +178,7 @@ export interface ExtractConfirmInput {
     type: string;
     dueAt: string;
     timezone?: string | null;
-    reminderSchedule?: string[];
+    reminders?: ReminderInput[];
     notes?: string | null;
   }[];
   sourceType: string;

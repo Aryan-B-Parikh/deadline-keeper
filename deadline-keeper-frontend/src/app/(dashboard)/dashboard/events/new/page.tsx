@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import { eventApi, type ExtractionResult, type ExtractedEvent } from '@/lib/api';
+import { eventApi, type ExtractionResult, type ExtractedEvent, type ReminderInput } from '@/lib/api';
 import { ExtractionPreview } from '@/components/ExtractionPreview';
 import { ReminderConfig } from '@/components/ReminderConfig';
 import { useRouter } from 'next/navigation';
@@ -17,7 +17,11 @@ export default function NewEventPage() {
   const [type, setType] = useState('other');
   const [dueAt, setDueAt] = useState('');
   const [timezone, setTimezone] = useState('UTC');
-  const [reminders, setReminders] = useState<string[]>(['7d', '1d', '2h']);
+  const [reminders, setReminders] = useState<ReminderInput[]>([
+    { offsetSeconds: 604800, channel: 'in_app' },
+    { offsetSeconds: 86400, channel: 'in_app' },
+    { offsetSeconds: 7200, channel: 'in_app' }
+  ]);
   const [notes, setNotes] = useState('');
 
   // Extraction state
@@ -37,7 +41,7 @@ export default function NewEventPage() {
         type,
         dueAt: isoDueAt,
         timezone,
-        reminderSchedule: reminders,
+        reminders,
         notes: notes || null,
       });
       router.push('/dashboard');
@@ -89,7 +93,11 @@ export default function NewEventPage() {
           type: e.type,
           dueAt: e.dueAt,
           timezone: e.timezone,
-          reminderSchedule: ['7d', '1d', '2h'],
+          reminders: [
+            { offsetSeconds: 604800, channel: 'in_app' },
+            { offsetSeconds: 86400, channel: 'in_app' },
+            { offsetSeconds: 7200, channel: 'in_app' }
+          ],
         })),
         sourceType: tab === 'screenshot' ? 'screenshot' : 'pasted_text',
       });
