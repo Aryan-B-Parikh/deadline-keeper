@@ -3,6 +3,7 @@ package com.deadlinekeeper.service;
 import com.deadlinekeeper.dto.EventRequest;
 import com.deadlinekeeper.dto.EventResponse;
 import com.deadlinekeeper.exception.ResourceNotFoundException;
+import com.deadlinekeeper.mapper.EventCompatibilityMapper;
 import com.deadlinekeeper.model.Event;
 import com.deadlinekeeper.repository.EventRepository;
 import org.springframework.stereotype.Service;
@@ -22,13 +23,16 @@ public class EventService {
     private final EventRepository eventRepository;
     private final DeadlineStatusService deadlineStatusService;
     private final ReminderService reminderService;
+    private final EventCompatibilityMapper eventMapper;
 
     public EventService(EventRepository eventRepository,
                         DeadlineStatusService deadlineStatusService,
-                        ReminderService reminderService) {
+                        ReminderService reminderService,
+                        EventCompatibilityMapper eventMapper) {
         this.eventRepository = eventRepository;
         this.deadlineStatusService = deadlineStatusService;
         this.reminderService = reminderService;
+        this.eventMapper = eventMapper;
     }
 
     public List<EventResponse> getUserEvents(UUID userId, String status) {
@@ -38,13 +42,13 @@ public class EventService {
         } else {
             events = eventRepository.findByUserId(userId);
         }
-        return events.stream().map(this::toResponse).toList();
+        return events.stream().map(eventMapper::toResponse).toList();
     }
 
     public EventResponse getEvent(UUID userId, UUID eventId) {
         Event event = eventRepository.findByIdAndUserId(eventId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Event", eventId.toString()));
-        return toResponse(event);
+        return eventMapper.toResponse(event);
     }
 
     public EventResponse createEvent(UUID userId, EventRequest request) {
@@ -55,10 +59,10 @@ public class EventService {
 
         String timezone = request.getTimezone() != null ? request.getTimezone() : "UTC";
         event.setTimezone(timezone);
-        event.setDueAt(computeDueAt(request.getDueAt(), request.getDueDate(), request.getDueTime(), timezone));
+        event.setDueAt(eventMapper.resolveCanonicalDueAt(request));
 
         event.setSource("manual");
-        event.setAiConfidence(1.0f);
+        event.setAiConfidence(null); // Explicitly null for manual
         event.setStatus(deadlineStatusService.computeStatus(event.getDueAt()));
         event.setNotes(request.getNotes());
 
@@ -66,7 +70,7 @@ public class EventService {
         List<String> schedule = request.getReminderSchedule() != null
                 ? request.getReminderSchedule() : List.of("7d", "1d", "2h");
         reminderService.syncReminders(saved, schedule);
-        return toResponse(saved);
+        return eventMapper.toResponse(saved);
     }
 
     public EventResponse updateEvent(UUID userId, UUID eventId, EventRequest request) {
@@ -78,7 +82,7 @@ public class EventService {
         if (request.getTimezone() != null) event.setTimezone(request.getTimezone());
         event.setNotes(request.getNotes());
 
-        event.setDueAt(computeDueAt(request.getDueAt(), request.getDueDate(), request.getDueTime(), event.getTimezone()));
+        event.setDueAt(eventMapper.resolveCanonicalDueAt(request));
 
         if (!event.getStatus().equals("done")) {
             event.setStatus(deadlineStatusService.computeStatus(event.getDueAt(), event.getStatus()));
@@ -88,7 +92,7 @@ public class EventService {
         if (request.getReminderSchedule() != null) {
             reminderService.syncReminders(saved, request.getReminderSchedule());
         }
-        return toResponse(saved);
+        return eventMapper.toResponse(saved);
     }
 
     public void deleteEvent(UUID userId, UUID eventId) {
@@ -101,7 +105,7 @@ public class EventService {
         Event event = eventRepository.findByIdAndUserId(eventId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Event", eventId.toString()));
         event.setStatus("done");
-        return toResponse(eventRepository.save(event));
+        return eventMapper.toResponse(eventRepository.save(event));
     }
 
     public EventResponse snoozeEvent(UUID userId, UUID eventId, String duration) {
@@ -114,25 +118,10 @@ public class EventService {
         event.setStatus(deadlineStatusService.computeStatus(newDueAt, event.getStatus()));
 
         Event saved = eventRepository.save(event);
-        return toResponse(saved);
+        return eventMapper.toResponse(saved);
     }
 
-    private Instant computeDueAt(Instant dueAt, LocalDate dueDate, LocalTime dueTime, String timezone) {
-        if (dueAt != null) {
-            return dueAt;
-        }
-        if (dueDate == null) {
-            throw new IllegalArgumentException("Either dueAt or dueDate must be provided");
-        }
-        ZoneId zone = ZoneId.of(timezone);
-        if (dueTime != null) {
-            return LocalDate.of(dueDate.getYear(), dueDate.getMonth(), dueDate.getDayOfMonth())
-                    .atTime(dueTime)
-                    .atZone(zone)
-                    .toInstant();
-        }
-        return dueDate.atStartOfDay(zone).toInstant();
-    }
+
 
     private Duration parseDuration(String duration) {
         if (duration.endsWith("d")) {
@@ -145,38 +134,5 @@ public class EventService {
         return Duration.ofDays(1);
     }
 
-    private EventResponse toResponse(Event event) {
-        ZoneId zone;
-        try {
-            zone = ZoneId.of(event.getTimezone());
-        } catch (Exception e) {
-            zone = ZoneOffset.UTC;
-        }
 
-        LocalDate dueDate = null;
-        LocalTime dueTime = null;
-        if (event.getDueAt() != null) {
-            var zoned = event.getDueAt().atZone(zone);
-            dueDate = zoned.toLocalDate();
-            dueTime = zoned.toLocalTime();
-        }
-
-        return EventResponse.builder()
-                .id(event.getId())
-                .title(event.getTitle())
-                .type(event.getType())
-                .dueAt(event.getDueAt())
-                .dueDate(dueDate)
-                .dueTime(dueTime)
-                .timezone(event.getTimezone())
-                .source(event.getSource())
-                .confidenceScore(event.getAiConfidence() != null ? event.getAiConfidence() : 1.0f)
-                .aiConfidence(event.getAiConfidence() != null ? event.getAiConfidence() : 1.0f)
-                .status(event.getStatus())
-                .notes(event.getNotes())
-                .sourceFileUrl(event.getSourceFileUrl())
-                .createdAt(event.getCreatedAt())
-                .updatedAt(event.getUpdatedAt())
-                .build();
-    }
 }
