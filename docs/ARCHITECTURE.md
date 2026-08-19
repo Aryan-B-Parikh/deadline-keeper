@@ -54,9 +54,9 @@ The old `dueDate`, `dueTime`, `confidenceScore`, and `reminderSchedule` event fi
 Reminder delivery uses two database entities:
 
 1. `reminder_deliveries` — business-level delivery state.
-2. `notification_outbox` — durable worker queue.
+2. `notification_outbox` — durable worker queue and retry/lease state.
 
-Workers claim jobs atomically using PostgreSQL `FOR UPDATE SKIP LOCKED` and `UPDATE ... RETURNING id`. A worker processes only the IDs returned by its own claim operation.
+Workers claim only due jobs atomically using PostgreSQL `FOR UPDATE SKIP LOCKED` and `UPDATE ... RETURNING id`. A worker processes only the IDs returned by its own claim operation.
 
 Each processing lease has an expiry. The watchdog:
 
@@ -64,7 +64,9 @@ Each processing lease has an expiry. The watchdog:
 - permanently fails expired jobs that have exhausted attempts;
 - synchronizes the associated delivery state.
 
-State transitions from `processing` require the worker's ID and an unexpired lease. This prevents a stale worker from overwriting a job reclaimed by another worker.
+State transitions from `processing` require the row to still be owned by the processing state and have an unexpired lease. This prevents a stale worker from overwriting a job reclaimed by another worker.
+
+In-app notifications also carry the deterministic outbox identity, preventing duplicate notification rows when a worker retries after a crash.
 
 ### Delivery guarantee
 
@@ -78,15 +80,19 @@ OAuth uses a short-lived, single-use state value stored against the authenticate
 
 Calendar sync uses Google's `syncToken` for incremental updates. A `410/GONE` sync-token failure resets the token and permits exactly one full-resync attempt, avoiding unbounded recursion.
 
-Imported external events are keyed by `(provider, external_id)` and are checked against the owning user before updates are applied.
+Imported external events are keyed by `(user_id, provider, external_id)` because provider event IDs are not globally unique across users. Ownership is checked before updates or deletions are applied.
+
+## Inbox forwarding
+
+Each application user has a high-entropy forwarding token. SendGrid Inbound Parse posts to `/api/inbox/webhook`; the backend extracts the token from the `deadline+<token>@<inbox-domain>` recipient address and resolves the owning user. There is no sender-email fallback and no shared webhook token.
 
 ## Security boundaries
 
 - All normal API routes require authentication.
 - Calendar start/trigger/disconnect operations derive the user ID from the authenticated JWT, never from request parameters.
 - JWT validation checks the signing algorithm, issuer, audience, and expiration.
-- Webhook authentication is fail-closed and uses constant-time token comparison.
-- Production startup rejects missing encryption/database/provider configuration and unsafe localhost CORS/base URL settings.
+- Inbox webhook authentication is fail-closed and uses constant-time token comparison.
+- Production startup rejects missing encryption/database/provider configuration and unsafe wildcard/localhost CORS or HTTP base URLs.
 - Health readiness never exposes raw database exception messages.
 
 ## Migrations and validation
