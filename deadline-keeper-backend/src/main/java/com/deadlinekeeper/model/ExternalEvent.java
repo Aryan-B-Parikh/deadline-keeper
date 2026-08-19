@@ -24,6 +24,9 @@ public class ExternalEvent {
     @Column(name = "deadline_id", nullable = false)
     private UUID deadlineId;
 
+    @Column(name = "user_id", nullable = false)
+    private UUID userId;
+
     @Column(nullable = false)
     private String provider;
 
