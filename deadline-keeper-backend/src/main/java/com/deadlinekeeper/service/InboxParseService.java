@@ -63,7 +63,9 @@ public class InboxParseService {
 
         ExtractConfirmRequest confirmRequest = new ExtractConfirmRequest();
         confirmRequest.setSourceType("email");
-        confirmRequest.setSourceReference("Email from %s: %s".formatted(fromEmail, subject));
+        String ref = "Email from %s: %s".formatted(fromEmail, subject);
+        if (ref.length() > 200) ref = ref.substring(0, 200) + "...";
+        confirmRequest.setSourceReference(ref);
 
         List<ExtractConfirmRequest.ConfirmedEvent> confirmedEvents = highConfidenceEvents.stream()
                 .filter(e -> e.getDueDate() != null)

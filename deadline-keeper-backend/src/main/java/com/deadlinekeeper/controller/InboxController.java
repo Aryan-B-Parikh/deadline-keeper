@@ -2,6 +2,8 @@ package com.deadlinekeeper.controller;
 
 import com.deadlinekeeper.config.SendGridConfig;
 import com.deadlinekeeper.dto.EventResponse;
+import com.deadlinekeeper.model.User;
+import com.deadlinekeeper.repository.UserRepository;
 import com.deadlinekeeper.service.InboxParseService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,10 +21,14 @@ public class InboxController {
 
     private final InboxParseService inboxParseService;
     private final SendGridConfig sendGridConfig;
+    private final UserRepository userRepository;
 
-    public InboxController(InboxParseService inboxParseService, SendGridConfig sendGridConfig) {
+    public InboxController(InboxParseService inboxParseService,
+                           SendGridConfig sendGridConfig,
+                           UserRepository userRepository) {
         this.inboxParseService = inboxParseService;
         this.sendGridConfig = sendGridConfig;
+        this.userRepository = userRepository;
     }
 
     @PostMapping("/webhook/{token}")
@@ -45,9 +51,22 @@ public class InboxController {
 
         log.info("Received inbound email from: {} subject: {}", from, subject);
 
-        String email = extractEmail(from);
+        // Look up user by forwarding token from the URL path first
+        User user = userRepository.findByForwardingToken(token).orElse(null);
+
+        // Fallback: look up by sender email
+        if (user == null) {
+            String email = extractEmail(from);
+            user = userRepository.findByEmailIgnoreCase(email).orElse(null);
+        }
+
+        if (user == null) {
+            log.warn("No user found for forwarding token or email: {} / {}", token, from);
+            return ResponseEntity.ok(Map.of("status", "ignored", "events_created", "0"));
+        }
+
         List<EventResponse> events = inboxParseService.processInboundEmail(
-                email, subject, textBody, htmlBody);
+                user.getEmail(), subject, textBody, htmlBody);
 
         return ResponseEntity.ok(Map.of(
                 "status", "processed",

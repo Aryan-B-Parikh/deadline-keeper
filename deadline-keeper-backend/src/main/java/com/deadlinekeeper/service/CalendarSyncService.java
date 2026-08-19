@@ -252,10 +252,15 @@ public class CalendarSyncService {
         Instant dueAt = parseGoogleEventDateTime(googleEvent);
         if (dueAt == null) return;
 
-        LocalDate dueDate = dueAt.atZone(ZoneOffset.UTC).toLocalDate();
-        LocalTime dueTime = dueAt.atZone(ZoneOffset.UTC).toLocalTime();
         String tz = googleEvent.getStart().getTimeZone() != null
                 ? googleEvent.getStart().getTimeZone() : "UTC";
+
+        ZoneId zone;
+        try {
+            zone = ZoneId.of(tz);
+        } catch (Exception e) {
+            zone = ZoneOffset.UTC;
+        }
 
         String type = classifyEventType(googleEvent.getSummary());
 
@@ -264,8 +269,8 @@ public class CalendarSyncService {
         event.setTitle(googleEvent.getSummary());
         event.setType(type);
         event.setDueAt(dueAt);
-        event.setDueDate(dueDate);
-        event.setDueTime(dueTime);
+        event.setDueDate(dueAt.atZone(zone).toLocalDate());
+        event.setDueTime(dueAt.atZone(zone).toLocalTime());
         event.setTimezone(tz);
         event.setSource("calendar_sync");
         event.setSourceReference("calendar:" + externalId);
@@ -343,8 +348,14 @@ public class CalendarSyncService {
         Instant newDueAt = parseGoogleEventDateTime(googleEvent);
         if (newDueAt != null) {
             event.setDueAt(newDueAt);
-            event.setDueDate(newDueAt.atZone(ZoneOffset.UTC).toLocalDate());
-            event.setDueTime(newDueAt.atZone(ZoneOffset.UTC).toLocalTime());
+            ZoneId zone;
+            try {
+                zone = ZoneId.of(event.getTimezone());
+            } catch (Exception e) {
+                zone = ZoneOffset.UTC;
+            }
+            event.setDueDate(newDueAt.atZone(zone).toLocalDate());
+            event.setDueTime(newDueAt.atZone(zone).toLocalTime());
             event.setStatus(statusService.computeStatus(newDueAt, event.getStatus()));
         }
         if (googleEvent.getSummary() != null) event.setTitle(googleEvent.getSummary());

@@ -91,8 +91,18 @@ public class ExtractionService {
             event.setDueTime(confirmed.getDueTime());
             event.setTimezone(tz);
             event.setSource(request.getSourceType() != null ? request.getSourceType() : "pasted_text");
-            event.setSourceReference(request.getSourceReference());
-            event.setSourceFileUrl(request.getSourceFileUrl());
+
+            String sourceRef = request.getSourceReference();
+            if (sourceRef != null && sourceRef.length() > 200) {
+                sourceRef = sourceRef.substring(0, 200) + "...";
+            }
+            event.setSourceReference(sourceRef);
+
+            String sourceUrl = request.getSourceFileUrl();
+            if (sourceUrl != null && sourceUrl.length() > 500) {
+                sourceUrl = sourceUrl.substring(0, 500);
+            }
+            event.setSourceFileUrl(sourceUrl);
             event.setAiConfidence(1.0f);
             event.setConfidenceScore(1.0f);
             event.setConfirmationStatus("user_confirmed");
@@ -183,12 +193,27 @@ public class ExtractionService {
     }
 
     private EventResponse toResponse(Event event) {
+        ZoneId zone;
+        try {
+            zone = ZoneId.of(event.getTimezone());
+        } catch (Exception e) {
+            zone = ZoneOffset.UTC;
+        }
+
+        LocalDate dueDate = null;
+        LocalTime dueTime = null;
+        if (event.getDueAt() != null) {
+            var zoned = event.getDueAt().atZone(zone);
+            dueDate = zoned.toLocalDate();
+            dueTime = zoned.toLocalTime();
+        }
+
         return EventResponse.builder()
                 .id(event.getId())
                 .title(event.getTitle())
                 .type(event.getType())
-                .dueDate(event.getDueDate())
-                .dueTime(event.getDueTime())
+                .dueDate(dueDate)
+                .dueTime(dueTime)
                 .timezone(event.getTimezone())
                 .source(event.getSource())
                 .confidenceScore(event.getConfidenceScore())

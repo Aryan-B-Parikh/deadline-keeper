@@ -8,6 +8,7 @@ import com.deadlinekeeper.service.UserService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -37,5 +38,17 @@ public class UserController {
             throw new ResourceNotFoundException("User", "current");
         }
         return ResponseEntity.ok(userService.updateProfile(userId, request));
+    }
+
+    @GetMapping("/profile/forwarding-token")
+    public ResponseEntity<Map<String, String>> getForwardingToken() {
+        UUID userId = SecurityUtils.getCurrentUserId();
+        if (userId == null) {
+            throw new ResourceNotFoundException("User", "current");
+        }
+        String token = userService.getForwardingToken(userId);
+        return ResponseEntity.ok(Map.of(
+                "token", token,
+                "address", "deadline+" + token + "@yourdomain.com"));
     }
 }

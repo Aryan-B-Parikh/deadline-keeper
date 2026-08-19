@@ -2,6 +2,7 @@ package com.deadlinekeeper.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -13,13 +14,15 @@ import java.util.List;
 @Setter
 public class EventRequest {
 
-    @NotBlank
+    @NotBlank(message = "Title is required")
+    @Size(max = 500, message = "Title must be under 500 characters")
     private String title;
 
-    @NotBlank
+    @NotBlank(message = "Type is required")
     private String type;
 
-    @NotNull
+    // Input convenience fields — dueAt is computed from these + timezone
+    @NotNull(message = "Due date is required")
     private LocalDate dueDate;
 
     private LocalTime dueTime;
@@ -28,5 +31,6 @@ public class EventRequest {
 
     private List<String> reminderSchedule;
 
+    @Size(max = 5000, message = "Notes must be under 5000 characters")
     private String notes;
 }

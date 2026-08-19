@@ -3,6 +3,7 @@ package com.deadlinekeeper.controller;
 import com.deadlinekeeper.dto.EventResponse;
 import com.deadlinekeeper.dto.ExtractConfirmRequest;
 import com.deadlinekeeper.dto.ExtractionResult;
+import com.deadlinekeeper.security.ImageValidator;
 import com.deadlinekeeper.security.SecurityUtils;
 import com.deadlinekeeper.service.ExtractionService;
 import org.springframework.http.HttpStatus;
@@ -20,11 +21,13 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 public class ExtractController {
 
     private final ExtractionService extractionService;
+    private final ImageValidator imageValidator;
 
     private final Map<UUID, Queue<Instant>> extractionCounts = new ConcurrentHashMap<>();
 
-    public ExtractController(ExtractionService extractionService) {
+    public ExtractController(ExtractionService extractionService, ImageValidator imageValidator) {
         this.extractionService = extractionService;
+        this.imageValidator = imageValidator;
     }
 
     @PostMapping
@@ -40,6 +43,7 @@ public class ExtractController {
         }
 
         if (screenshot != null && !screenshot.isEmpty()) {
+            imageValidator.validate(screenshot);
             return ResponseEntity.ok(extractionService.extractFromImage(screenshot));
         } else if (pastedText != null && !pastedText.isBlank()) {
             return ResponseEntity.ok(extractionService.extractFromText(pastedText));

@@ -12,6 +12,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 
@@ -148,12 +149,27 @@ public class EventService {
     }
 
     private EventResponse toResponse(Event event) {
+        ZoneId zone;
+        try {
+            zone = ZoneId.of(event.getTimezone());
+        } catch (Exception e) {
+            zone = ZoneOffset.UTC;
+        }
+
+        LocalDate dueDate = null;
+        LocalTime dueTime = null;
+        if (event.getDueAt() != null) {
+            var zoned = event.getDueAt().atZone(zone);
+            dueDate = zoned.toLocalDate();
+            dueTime = zoned.toLocalTime();
+        }
+
         return EventResponse.builder()
                 .id(event.getId())
                 .title(event.getTitle())
                 .type(event.getType())
-                .dueDate(event.getDueDate())
-                .dueTime(event.getDueTime())
+                .dueDate(dueDate)
+                .dueTime(dueTime)
                 .timezone(event.getTimezone())
                 .source(event.getSource())
                 .confidenceScore(event.getConfidenceScore())

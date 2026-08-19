@@ -32,6 +32,9 @@ public class User {
     @Column(nullable = false)
     private String plan = "free";
 
+    @Column(name = "forwarding_token", unique = true, nullable = false)
+    private String forwardingToken;
+
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "notification_prefs", columnDefinition = "jsonb")
     private Map<String, Object> notificationPrefs;

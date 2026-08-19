@@ -44,4 +44,10 @@ public class UserService {
                 .notificationPrefs(user.getNotificationPrefs())
                 .build();
     }
+
+    public String getForwardingToken(UUID userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User", userId.toString()));
+        return user.getForwardingToken();
+    }
 }
