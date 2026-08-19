@@ -211,7 +211,7 @@ class NotificationOutboxProcessorTest {
     @DisplayName("Watchdog reclaims expired leases")
     void watchdogReclaim() {
         when(outboxRepository.failExpiredLeasesExceedingMaxAttempts()).thenReturn(1);
-        when(outboxRepository.reclaimExpiredLeasesWithBackoff(30)).thenReturn(1);
+        when(outboxRepository.reclaimExpiredLeasesWithExponentialBackoff(30, 600)).thenReturn(1);
 
         int reclaimed = processor.reclaimExpiredLeases();
 

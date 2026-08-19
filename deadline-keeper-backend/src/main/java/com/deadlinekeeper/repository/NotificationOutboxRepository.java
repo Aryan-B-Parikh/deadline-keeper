@@ -116,7 +116,8 @@ public interface NotificationOutboxRepository extends JpaRepository<Notification
     int failExpiredLeasesExceedingMaxAttempts();
 
     /**
-     * Reclaim expired processing rows with remaining attempts by resetting to 'pending' with backoff.
+     * Reclaim expired processing rows with remaining attempts by resetting to 'pending'
+     * with exponential backoff calculated per row from its attempt_count.
      */
     @Modifying
     @Query(value = """
@@ -125,12 +126,16 @@ public interface NotificationOutboxRepository extends JpaRepository<Notification
                 processing_started_at = NULL,
                 lease_until = NULL,
                 last_error = 'Lease expired (worker crash)',
-                next_retry_at = NOW() + (:backoffSeconds || ' seconds')::interval
+                next_retry_at = NOW() + (
+                    LEAST(:maxBackoffSeconds, :baseBackoffSeconds * POWER(2, GREATEST(0, attempt_count - 1))) || ' seconds'
+                )::interval
             WHERE status = 'processing'
               AND lease_until < NOW()
               AND attempt_count < max_attempts
             """, nativeQuery = true)
-    int reclaimExpiredLeasesWithBackoff(@Param("backoffSeconds") long backoffSeconds);
+    int reclaimExpiredLeasesWithExponentialBackoff(
+            @Param("baseBackoffSeconds") long baseBackoffSeconds,
+            @Param("maxBackoffSeconds") long maxBackoffSeconds);
 
     List<NotificationOutbox> findByStatusOrderByScheduledAtAsc(String status);
 

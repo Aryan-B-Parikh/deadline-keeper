@@ -298,7 +298,7 @@ public class CalendarSyncService {
         event.setSource("calendar_sync");
         event.setSourceReference("calendar:" + externalId);
         event.setAiConfidence(0.8f);
-        event.setConfirmationStatus("system");
+        event.setConfirmationStatus("auto_imported");
         event.setUserConfirmed(false);
         event.setStatus(statusService.computeStatus(dueAt));
         event.setNotes(googleEvent.getDescription());

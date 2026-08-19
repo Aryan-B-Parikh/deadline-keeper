@@ -120,14 +120,14 @@ class OutboxFailureMatrixTest {
     void watchdogReclaimsExpiredLease() {
         when(outboxRepository.findExpiredDeliveryIdsExceedingMaxAttempts()).thenReturn(List.of(deliveryId));
         when(outboxRepository.failExpiredLeasesExceedingMaxAttempts()).thenReturn(2);
-        when(outboxRepository.reclaimExpiredLeasesWithBackoff(30)).thenReturn(3);
+        when(outboxRepository.reclaimExpiredLeasesWithExponentialBackoff(30, 600)).thenReturn(3);
 
         int totalReclaimed = processor.reclaimExpiredLeases();
 
         verify(outboxRepository).findExpiredDeliveryIdsExceedingMaxAttempts();
         verify(deliveryRepository).markDeliveriesFailed(eq(List.of(deliveryId)), contains("Watchdog timeout"));
         verify(outboxRepository).failExpiredLeasesExceedingMaxAttempts();
-        verify(outboxRepository).reclaimExpiredLeasesWithBackoff(30);
+        verify(outboxRepository).reclaimExpiredLeasesWithExponentialBackoff(30, 600);
         assertThat(totalReclaimed).isEqualTo(5);
     }
 

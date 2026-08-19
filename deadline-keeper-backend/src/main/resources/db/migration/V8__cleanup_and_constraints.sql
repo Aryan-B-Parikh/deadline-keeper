@@ -89,7 +89,7 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_events_confirmation') THEN
         ALTER TABLE events 
             ADD CONSTRAINT chk_events_confirmation 
-            CHECK (confirmation_status IN ('system', 'user_confirmed', 'rejected'));
+            CHECK (confirmation_status IN ('system', 'user_confirmed', 'auto_imported', 'rejected'));
     END IF;
 
     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_notification_outbox_status') THEN
@@ -101,6 +101,6 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_reminder_deliveries_status') THEN
         ALTER TABLE reminder_deliveries 
             ADD CONSTRAINT chk_reminder_deliveries_status 
-            CHECK (status IN ('pending', 'processing', 'sent', 'failed'));
+            CHECK (status IN ('pending', 'processing', 'sent', 'failed', 'cancelled'));
     END IF;
 END $$;

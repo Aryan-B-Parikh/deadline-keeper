@@ -21,8 +21,7 @@ public interface ReminderDeliveryRepository extends JpaRepository<ReminderDelive
     @org.springframework.data.jpa.repository.Query(value = """
             UPDATE reminder_deliveries
             SET status = 'failed',
-                error_message = :errorMessage,
-                updated_at = NOW()
+                last_error = :errorMessage
             WHERE id IN :deliveryIds
               AND status != 'sent'
             """, nativeQuery = true)

@@ -124,10 +124,11 @@ public class NotificationOutboxProcessor {
             log.info("Watchdog marked {} expired leases and deliveries as permanently FAILED (max attempts exceeded)", failed);
         }
 
-        long backoff = retryPolicy.getRetryBaseSeconds();
-        int reclaimed = outboxRepository.reclaimExpiredLeasesWithBackoff(backoff);
+        int reclaimed = outboxRepository.reclaimExpiredLeasesWithExponentialBackoff(
+                retryPolicy.getRetryBaseSeconds(),
+                retryPolicy.getRetryMaxSeconds());
         if (reclaimed > 0) {
-            log.warn("Watchdog reclaimed {} expired leases for retry", reclaimed);
+            log.warn("Watchdog reclaimed {} expired leases for retry with exponential backoff", reclaimed);
         }
         return failed + reclaimed;
     }
