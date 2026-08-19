@@ -60,9 +60,11 @@ First-class reminder configuration replacing the old event-level reminder array.
 
 Represents a concrete scheduled delivery generated from a reminder.
 
-Important fields include `reminder_id`, `event_id`, `scheduled_at`, `sent_at`, `status`, `attempt_count`, `provider_message_id`, `last_error`, and `channel`.
+Important fields include `reminder_id`, `event_id`, `scheduled_at`, `sent_at`, `status`, `last_error`, and `channel`.
 
 Delivery states include `pending`, `processing`, `sent`, `failed`, and `cancelled`.
+
+Retry ownership and attempt counts live in the notification outbox, avoiding duplicate state between the delivery and worker queue.
 
 ## `notification_outbox`
 
