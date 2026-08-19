@@ -53,8 +53,7 @@ class OutboxPostgresIntegrationTest {
         registry.add("spring.flyway.enabled", () -> "true");
     }
 
-    @Autowired
-    private NotificationOutboxRepository outboxRepository;
+    @Autowired private NotificationOutboxRepository outboxRepository;
     @Autowired private ReminderDeliveryRepository deliveryRepository;
     @Autowired private EventRepository eventRepository;
     @Autowired private ReminderRepository reminderRepository;
@@ -99,7 +98,6 @@ class OutboxPostgresIntegrationTest {
         int totalJobs = 100;
         int workerCount = 5;
 
-        // Seed 100 distinct reminders and deliveries to honor UNIQUE(event_id, reminder_id, channel)
         for (int i = 0; i < totalJobs; i++) {
             Reminder reminder = new Reminder();
             reminder.setEventId(testEvent.getId());
@@ -136,7 +134,6 @@ class OutboxPostgresIntegrationTest {
         doAnswer(invocation -> {
             @SuppressWarnings("unchecked")
             List<NotificationOutbox> claimedJobs = (List<NotificationOutbox>) invocation.callRealMethod();
-            
             for (NotificationOutbox outbox : claimedJobs) {
                 claimCountPerId.merge(outbox.getId(), 1, Integer::sum);
                 totalClaimsReturned.incrementAndGet();
@@ -148,7 +145,7 @@ class OutboxPostgresIntegrationTest {
         doAnswer(invocation -> {
             totalSends.incrementAndGet();
             return null;
-        }).when(emailChannel).send(any(), any(), any(), any());
+        }).when(emailChannel).send(any(), any(), any(), any(), any());
 
         ExecutorService executor = Executors.newFixedThreadPool(workerCount);
         CountDownLatch startLatch = new CountDownLatch(1);
@@ -158,9 +155,7 @@ class OutboxPostgresIntegrationTest {
             executor.submit(() -> {
                 try {
                     startLatch.await();
-                    while (totalSends.get() < totalJobs) {
-                        processor.processPending();
-                    }
+                    while (totalSends.get() < totalJobs) processor.processPending();
                 } catch (Exception e) {
                     throw new RuntimeException(e);
                 } finally {
@@ -177,14 +172,9 @@ class OutboxPostgresIntegrationTest {
         assertThat(totalSends.get()).isGreaterThanOrEqualTo(totalJobs);
         assertThat(outboxRepository.countByStatus("sent")).isEqualTo(totalJobs);
         assertThat(outboxRepository.countByStatus("pending")).isEqualTo(0);
-
         assertThat(totalClaimsReturned.get()).isEqualTo(totalJobs);
         assertThat(claimCountPerId.size()).isEqualTo(totalJobs);
-        for (Map.Entry<UUID, Integer> entry : claimCountPerId.entrySet()) {
-            assertThat(entry.getValue())
-                .as("Job %s should have exactly 1 claim returned by the DB", entry.getKey())
-                .isEqualTo(1);
-        }
+        claimCountPerId.values().forEach(count -> assertThat(count).isEqualTo(1));
     }
 
     @Test
@@ -214,7 +204,7 @@ class OutboxPostgresIntegrationTest {
         outbox.setStatus("processing");
         outbox.setAttemptCount(1);
         outbox.setMaxAttempts(3);
-        outbox.setLeaseUntil(Instant.now().minusSeconds(10)); // expired lease
+        outbox.setLeaseUntil(Instant.now().minusSeconds(10));
         outbox.setIdempotencyKey("reminder:" + delivery.getId());
         outbox = outboxRepository.save(outbox);
 
@@ -254,7 +244,7 @@ class OutboxPostgresIntegrationTest {
         outbox.setStatus("processing");
         outbox.setAttemptCount(3);
         outbox.setMaxAttempts(3);
-        outbox.setLeaseUntil(Instant.now().minusSeconds(10)); // expired lease
+        outbox.setLeaseUntil(Instant.now().minusSeconds(10));
         outbox.setIdempotencyKey("reminder:" + delivery.getId());
         outbox = outboxRepository.save(outbox);
 
@@ -297,7 +287,7 @@ class OutboxPostgresIntegrationTest {
         outbox.setStatus("processing");
         outbox.setAttemptCount(1);
         outbox.setMaxAttempts(3);
-        outbox.setLeaseUntil(Instant.now().plusSeconds(120)); // ACTIVE lease
+        outbox.setLeaseUntil(Instant.now().plusSeconds(120));
         outbox.setIdempotencyKey("reminder:" + delivery.getId());
         outbox = outboxRepository.save(outbox);
 
@@ -335,17 +325,15 @@ class OutboxPostgresIntegrationTest {
         outbox.setStatus("processing");
         outbox.setAttemptCount(1);
         outbox.setMaxAttempts(3);
-        outbox.setLeaseUntil(Instant.now().minusSeconds(10)); // expired
+        outbox.setLeaseUntil(Instant.now().minusSeconds(10));
         outbox.setIdempotencyKey("reminder:" + delivery.getId());
         outbox = outboxRepository.save(outbox);
 
-        // Stale worker tries to markSent on expired outbox row
         int updated = outboxRepository.markSentIfOwned(outbox.getId());
         assertThat(updated).isEqualTo(0);
 
         writer.markSent(outbox);
 
-        // Verify delivery status was not altered to sent
         ReminderDelivery refreshedDelivery = deliveryRepository.findById(delivery.getId()).orElseThrow();
         assertThat(refreshedDelivery.getStatus()).isEqualTo("pending");
     }
