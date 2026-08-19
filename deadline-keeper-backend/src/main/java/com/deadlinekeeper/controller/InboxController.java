@@ -29,13 +29,20 @@ public class InboxController {
         this.userRepository = userRepository;
     }
 
-    @PostMapping("/webhook/{token}")
+    @PostMapping({"/webhook", "/webhook/{pathToken}"})
     public ResponseEntity<Map<String, String>> handleInboundEmail(
-            @PathVariable String token,
+            @PathVariable(required = false) String pathToken,
             @RequestParam("from") String from,
             @RequestParam("subject") String subject,
+            @RequestParam(value = "to", required = false) String to,
             @RequestParam(value = "text", required = false) String textBody,
             @RequestParam(value = "html", required = false) String htmlBody) {
+
+        String token = pathToken != null ? pathToken : extractForwardingToken(to);
+        if (token == null || token.isBlank()) {
+            log.warn("Inbound email rejected: missing forwarding token");
+            return ResponseEntity.status(401).body(Map.of("error", "Invalid token"));
+        }
 
         User user = userRepository.findByForwardingToken(token).orElse(null);
         if (user == null || !MessageDigest.isEqual(
@@ -53,5 +60,21 @@ public class InboxController {
         return ResponseEntity.ok(Map.of(
                 "status", "processed",
                 "events_created", String.valueOf(events.size())));
+    }
+
+    private String extractForwardingToken(String toField) {
+        if (toField == null || toField.isBlank()) return null;
+
+        String address = toField.trim();
+        int start = address.indexOf('<');
+        int end = address.indexOf('>');
+        if (start >= 0 && end > start) {
+            address = address.substring(start + 1, end).trim();
+        }
+
+        int plus = address.indexOf('+');
+        int at = address.indexOf('@', plus + 1);
+        if (plus < 0 || at <= plus + 1) return null;
+        return address.substring(plus + 1, at);
     }
 }
