@@ -25,6 +25,7 @@ export default function NewEventPage() {
   const [extracting, setExtracting] = useState(false);
   const [extractionResult, setExtractionResult] = useState<ExtractionResult | null>(null);
   const [pastedText, setPastedText] = useState('');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Manual submit
@@ -48,13 +49,12 @@ export default function NewEventPage() {
 
   // Screenshot extraction
   const handleScreenshotExtract = async () => {
-    const file = fileInputRef.current?.files?.[0];
-    if (!file) return;
+    if (!selectedFile) return;
 
     setExtracting(true);
     try {
       const formData = new FormData();
-      formData.append('screenshot', file);
+      formData.append('screenshot', selectedFile);
       const result = await eventApi.extract(formData);
       setExtractionResult(result);
     } catch (err: any) {
@@ -247,20 +247,26 @@ export default function NewEventPage() {
               ref={fileInputRef}
               type="file"
               accept="image/*"
-              onChange={() => {}}
+              onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)}
               className="hidden"
               id="screenshot-upload"
             />
             <label htmlFor="screenshot-upload" className="cursor-pointer">
               <div className="text-4xl mb-3">📸</div>
-              <p className="text-gray-600 font-medium">Click to upload a screenshot</p>
-              <p className="text-sm text-gray-400 mt-1">or drag and drop</p>
+              {selectedFile ? (
+                <p className="text-brand-600 font-medium">{selectedFile.name}</p>
+              ) : (
+                <>
+                  <p className="text-gray-600 font-medium">Click to upload a screenshot</p>
+                  <p className="text-sm text-gray-400 mt-1">or drag and drop</p>
+                </>
+              )}
             </label>
           </div>
 
           <button
             onClick={handleScreenshotExtract}
-            disabled={extracting || !fileInputRef.current?.files?.[0]}
+            disabled={extracting || !selectedFile}
             className="w-full bg-brand-600 text-white py-2 px-4 rounded-lg hover:bg-brand-700 transition-colors disabled:opacity-50 font-medium"
           >
             {extracting ? 'Extracting deadlines...' : 'Extract Deadlines'}

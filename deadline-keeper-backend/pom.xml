@@ -74,11 +74,11 @@
             <scope>runtime</scope>
         </dependency>
 
-        <!-- Google Gemini API -->
+        <!-- Load .env file into the environment (dev) -->
         <dependency>
-            <groupId>com.google.genai</groupId>
-            <artifactId>google-genai</artifactId>
-            <version>0.2.0</version>
+            <groupId>me.paulschwarz</groupId>
+            <artifactId>springboot3-dotenv</artifactId>
+            <version>5.1.0</version>
         </dependency>
 
         <!-- SendGrid -->

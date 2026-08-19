@@ -49,7 +49,11 @@
 
 ## 5. Environment Variables
 
-Create `deadline-keeper-backend/.env`:
+Secrets are **not** stored in `application.yml` — they are read from environment
+variables (or the `deadline-keeper-backend/.env` file, which is loaded automatically
+by [spring-dotenv](https://github.com/paulschwarz/dotenv) and gitignored).
+
+Create `deadline-keeper-backend/.env` (copy from `.env.example`):
 
 ```env
 # Supabase
@@ -163,7 +167,8 @@ D:\Agent\
 | Problem | Fix |
 |---|---|
 | Flyway migration fails | Check `DATABASE_URL` and credentials; ensure the Supabase project is running |
-| JWT validation fails | Verify `SUPABASE_JWT_SECRET` matches your project's JWT secret |
+| JWT validation fails | Verify `SUPABASE_JWT_SECRET` matches your project's JWT secret (Settings → API → JWT settings). The backend auto-detects the format: base64-encoded legacy secrets, `sb_secret_`-prefixed secrets, and raw strings are all handled |
+| Backend starts with "Failed to configure a DataSource" | `DATABASE_URL` is empty — create `.env` from `.env.example` or set the env vars |
 | Gemini extraction returns empty | Check API key and quota at Google AI Studio |
 | SendGrid emails not sending | Verify sender identity; check API key permissions |
 | CORS errors in frontend | Ensure `CORS_ALLOWED_ORIGINS` includes your frontend URL |

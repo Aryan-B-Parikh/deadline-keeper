@@ -3,10 +3,12 @@ spring:
     name: deadline-keeper-backend
 
   datasource:
-    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/postgres}
-    username: ${DATABASE_USERNAME:postgres}
-    password: ${DATABASE_PASSWORD:postgres}
+    url: ${DATABASE_URL:}
+    username: ${DATABASE_USERNAME:}
+    password: ${DATABASE_PASSWORD:}
     driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 5
 
   jpa:
     hibernate:
@@ -16,6 +18,8 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
+        jdbc:
+          batch_size: 0
 
   flyway:
     enabled: true
@@ -32,26 +36,26 @@ server:
 
 # Supabase
 supabase:
-  url: ${SUPABASE_URL:https://placeholder.supabase.co}
-  jwt-secret: ${SUPABASE_JWT_SECRET:placeholder}
-  service-role-key: ${SUPABASE_SERVICE_ROLE_KEY:placeholder}
+  url: ${SUPABASE_URL:}
+  jwt-secret: ${SUPABASE_JWT_SECRET:}
+  service-role-key: ${SUPABASE_SERVICE_ROLE_KEY:}
 
 # Google Gemini
 gemini:
-  api-key: ${GEMINI_API_KEY:placeholder}
+  api-key: ${GEMINI_API_KEY:}
   model: ${GEMINI_MODEL:gemini-2.5-flash}
 
 # SendGrid
 sendgrid:
-  api-key: ${SENDGRID_API_KEY:placeholder}
-  from-email: ${SENDGRID_FROM_EMAIL:deadlines@example.com}
-  inbox-parse-domain: ${SENDGRID_INBOX_PARSE_DOMAIN:deadlines.example.com}
+  api-key: ${SENDGRID_API_KEY:}
+  from-email: ${SENDGRID_FROM_EMAIL:}
+  inbox-parse-domain: ${SENDGRID_INBOX_PARSE_DOMAIN:}
 
 # Google Calendar
 google:
   calendar:
-    client-id: ${GOOGLE_CALENDAR_CLIENT_ID:placeholder}
-    client-secret: ${GOOGLE_CALENDAR_CLIENT_SECRET:placeholder}
+    client-id: ${GOOGLE_CALENDAR_CLIENT_ID:}
+    client-secret: ${GOOGLE_CALENDAR_CLIENT_SECRET:}
     redirect-uri: ${GOOGLE_CALENDAR_REDIRECT_URI:http://localhost:8080/api/calendar/sync/callback}
 
 # CORS

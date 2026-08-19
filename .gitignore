@@ -27,3 +27,11 @@ Thumbs.db
 .vscode/
 *.swp
 *.swo
+
+# Tools & CLI
+.tools/
+supabase/
+
+# Test artifacts
+test-screenshot.png
+CodeSage_Executive_Report.md

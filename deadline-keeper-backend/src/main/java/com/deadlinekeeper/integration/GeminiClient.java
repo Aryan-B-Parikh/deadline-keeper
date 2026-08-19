@@ -3,21 +3,25 @@ package com.deadlinekeeper.integration;
 import com.deadlinekeeper.config.GeminiConfig;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.genai.Client;
-import com.google.genai.types.Content;
-import com.google.genai.types.GenerateContentConfig;
-import com.google.genai.types.GenerateContentResponse;
-import com.google.genai.types.Part;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.RestTemplate;
 
 import java.util.List;
+import java.util.Map;
 
 @Component
 public class GeminiClient {
 
-    private final Client client;
+    private final String apiKey;
     private final String model;
     private final ObjectMapper objectMapper;
+    private final RestTemplate restTemplate;
+
+    private static final String BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models/";
 
     private static final String EXTRACTION_PROMPT = """
             You are a deadline extraction assistant. Analyze the provided input (text or image)
@@ -60,24 +64,26 @@ public class GeminiClient {
             """.formatted(java.time.LocalDate.now().toString());
 
     public GeminiClient(GeminiConfig config) {
-        this.client = Client.builder()
-                .apiKey(config.getApiKey())
-                .build();
+        this.apiKey = config.getApiKey();
         this.model = config.getModel();
         this.objectMapper = new ObjectMapper();
+        this.restTemplate = new RestTemplate();
     }
 
     public JsonNode extractFromText(String text) {
         try {
-            Content content = Content.builder()
-                    .parts(List.of(Part.fromText(EXTRACTION_PROMPT + "\n\nInput text:\n" + text)))
-                    .build();
+            String url = BASE_URL + model + ":generateContent?key=" + apiKey;
 
-            GenerateContentResponse response = client.models.generateContent(
-                    model, content, GenerateContentConfig.builder().build());
+            Map<String, Object> part = Map.of("text", EXTRACTION_PROMPT + "\n\nInput text:\n" + text);
+            Map<String, Object> content = Map.of("parts", List.of(part));
+            Map<String, Object> body = Map.of("contents", List.of(content));
 
-            String responseText = response.text();
-            return objectMapper.readTree(responseText);
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            HttpEntity<Map<String, Object>> request = new HttpEntity<>(body, headers);
+
+            ResponseEntity<String> response = restTemplate.postForEntity(url, request, String.class);
+            return parseResponse(response.getBody());
         } catch (Exception e) {
             throw new RuntimeException("Gemini text extraction failed: " + e.getMessage(), e);
         }
@@ -85,20 +91,49 @@ public class GeminiClient {
 
     public JsonNode extractFromImage(byte[] imageData, String mimeType) {
         try {
-            Part textPart = Part.fromText(EXTRACTION_PROMPT);
-            Part imagePart = Part.fromBytes(imageData, mimeType);
+            String url = BASE_URL + model + ":generateContent?key=" + apiKey;
 
-            Content content = Content.builder()
-                    .parts(List.of(textPart, imagePart))
-                    .build();
+            String base64Image = java.util.Base64.getEncoder().encodeToString(imageData);
 
-            GenerateContentResponse response = client.models.generateContent(
-                    model, content, GenerateContentConfig.builder().build());
+            Map<String, Object> textPart = Map.of("text", EXTRACTION_PROMPT);
+            Map<String, Object> imagePart = Map.of(
+                    "inline_data", Map.of(
+                            "mime_type", mimeType,
+                            "data", base64Image
+                    )
+            );
+            Map<String, Object> content = Map.of("parts", List.of(textPart, imagePart));
+            Map<String, Object> body = Map.of("contents", List.of(content));
 
-            String responseText = response.text();
-            return objectMapper.readTree(responseText);
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            HttpEntity<Map<String, Object>> request = new HttpEntity<>(body, headers);
+
+            ResponseEntity<String> response = restTemplate.postForEntity(url, request, String.class);
+            return parseResponse(response.getBody());
         } catch (Exception e) {
             throw new RuntimeException("Gemini image extraction failed: " + e.getMessage(), e);
         }
+    }
+
+    private JsonNode parseResponse(String responseBody) throws Exception {
+        JsonNode root = objectMapper.readTree(responseBody);
+
+        // Extract the text from Gemini's response structure
+        String text = root.path("candidates").path(0).path("content").path("parts").path(0).path("text").asText();
+
+        // The text might contain markdown code blocks, strip them
+        text = text.trim();
+        if (text.startsWith("```json")) {
+            text = text.substring(7);
+        } else if (text.startsWith("```")) {
+            text = text.substring(3);
+        }
+        if (text.endsWith("```")) {
+            text = text.substring(0, text.length() - 3);
+        }
+        text = text.trim();
+
+        return objectMapper.readTree(text);
     }
 }

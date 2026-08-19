@@ -4,6 +4,8 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -55,9 +57,8 @@ public class Event {
     @Column(nullable = false)
     private String status = "upcoming";
 
-    @ElementCollection
-    @CollectionTable(name = "events", joinColumns = @JoinColumn(name = "id"))
-    @Column(name = "reminder_schedule")
+    @JdbcTypeCode(SqlTypes.ARRAY)
+    @Column(name = "reminder_schedule", columnDefinition = "text[]")
     private List<String> reminderSchedule;
 
     private String notes;

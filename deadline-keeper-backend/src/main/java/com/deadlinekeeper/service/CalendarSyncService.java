@@ -115,7 +115,7 @@ public class CalendarSyncService {
                     .setApplicationName("DeadlineKeeper")
                     .build();
 
-            Calendar.ListRequest request = calendarService.events().list("primary")
+            var request = calendarService.events().list("primary")
                     .setMaxResults(50)
                     .setTimeMin(new DateTime(System.currentTimeMillis()))
                     .setSingleEvents(true)

@@ -55,13 +55,20 @@ goto fail
 @IF NOT "%MVNW_JAVA%"=="" goto runMvnw
 
 @REM Find project base dir
-set MAVEN_PROJECTBASEDIR=%~dp0..
+set MAVEN_PROJECTBASEDIR=%~dp0
 
 @REM ==== DOWNLOAD MAVEN ====
-set MAVEN_URL=%distributionUrl%
+@IF EXIST "%MAVEN_PROJECTBASEDIR%\.mvn\wrapper\maven\bin\mvn.cmd" goto runMvnw
+
+set MAVEN_URL=
 set MAVEN_HOME=%MAVEN_PROJECTBASEDIR%\.mvn\wrapper\maven
 
-@IF EXIST "%MAVEN_HOME%\bin\mvn.cmd" goto runMvnw
+@REM Read distributionUrl from maven-wrapper.properties
+if not exist "%MAVEN_PROJECTBASEDIR%\.mvn\wrapper\maven-wrapper.properties" goto fail
+for /f "usebackq tokens=1,2 delims==" %%A in ("%MAVEN_PROJECTBASEDIR%\.mvn\wrapper\maven-wrapper.properties") do (
+    if "%%A"=="distributionUrl" set MAVEN_URL=%%B
+)
+if "%MAVEN_URL%"=="" goto fail
 
 @echo Downloading Maven...
 @echo From: %MAVEN_URL%
@@ -72,12 +79,13 @@ if not exist "%MAVEN_HOME%" mkdir "%MAVEN_HOME%"
 @REM Download using PowerShell
 powershell -Command "& { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri '%MAVEN_URL%' -OutFile '%MAVEN_HOME%\maven.zip' }"
 
-@REM Extract
-powershell -Command "& { Expand-Archive -Path '%MAVEN_HOME%\maven.zip' -DestinationPath '%MAVEN_HOME%' -Force }"
+@REM Extract to a staging dir, then copy recursively (move with wildcards
+@REM does not copy subdirectories, which breaks the layout)
+powershell -Command "& { Expand-Archive -Path '%MAVEN_HOME%\maven.zip' -DestinationPath '%MAVEN_HOME%\extract' -Force }"
 
-@REM Move contents up
-for /d %%i in ("%MAVEN_HOME%\apache-maven-*") do move "%%i\*" "%MAVEN_HOME%\" >nul 2>&1
-for /d %%i in ("%MAVEN_HOME%\apache-maven-*") do rmdir "%%i"
+for /d %%i in ("%MAVEN_HOME%\extract\apache-maven-*") do xcopy "%%i" "%MAVEN_HOME%\" /e /i /y /q >nul
+rmdir /s /q "%MAVEN_HOME%\extract" 2>nul
+del "%MAVEN_HOME%\maven.zip" 2>nul
 
 :runMvnw
 set MVNW_JAVA=%JAVA_HOME%\bin\java.exe
