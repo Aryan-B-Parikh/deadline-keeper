@@ -1,7 +1,6 @@
 package com.deadlinekeeper.controller;
 
 import com.deadlinekeeper.dto.NotificationResponse;
-import com.deadlinekeeper.exception.ResourceNotFoundException;
 import com.deadlinekeeper.security.SecurityUtils;
 import com.deadlinekeeper.service.NotificationService;
 import org.springframework.http.ResponseEntity;
@@ -25,29 +24,18 @@ public class NotificationController {
     public ResponseEntity<List<NotificationResponse>> listNotifications(
             @RequestParam(required = false, defaultValue = "false") boolean unreadOnly) {
         UUID userId = SecurityUtils.getCurrentUserId();
-        if (userId == null) {
-            throw new ResourceNotFoundException("User", "current");
-        }
         return ResponseEntity.ok(notificationService.getUserNotifications(userId, unreadOnly));
     }
 
     @PostMapping("/{id}/read")
     public ResponseEntity<Void> markAsRead(@PathVariable UUID id) {
-        UUID userId = SecurityUtils.getCurrentUserId();
-        if (userId == null) {
-            throw new ResourceNotFoundException("User", "current");
-        }
-        notificationService.markAsRead(userId, id);
+        notificationService.markAsRead(SecurityUtils.getCurrentUserId(), id);
         return ResponseEntity.ok().build();
     }
 
     @GetMapping("/unread-count")
     public ResponseEntity<Map<String, Long>> unreadCount() {
-        UUID userId = SecurityUtils.getCurrentUserId();
-        if (userId == null) {
-            throw new ResourceNotFoundException("User", "current");
-        }
-        long count = notificationService.getUnreadCount(userId);
+        long count = notificationService.getUnreadCount(SecurityUtils.getCurrentUserId());
         return ResponseEntity.ok(Map.of("count", count));
     }
 }
