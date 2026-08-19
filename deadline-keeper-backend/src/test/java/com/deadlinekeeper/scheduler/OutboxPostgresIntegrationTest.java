@@ -173,7 +173,7 @@ class OutboxPostgresIntegrationTest {
             executor.submit(() -> {
                 try {
                     startLatch.await();
-                    while (outboxRepository.countByStatus("pending") > 0) {
+                    while (totalSends.get() < totalJobs) {
                         processor.processPending();
                     }
                 } catch (Exception e) {
