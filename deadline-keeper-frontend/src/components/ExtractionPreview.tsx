@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { type ExtractedEvent } from '@/lib/api';
-import { cn, typeIcon } from '@/lib/utils';
+import { cn, typeIcon, toLocalDatetimeString } from '@/lib/utils';
 
 interface ExtractionPreviewProps {
   events: ExtractedEvent[];
@@ -60,25 +60,22 @@ export function ExtractionPreview({ events, clarificationQuestion, onConfirm, on
                   <option value="other">Other</option>
                 </select>
               </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Due Date</label>
+              <div className="col-span-2 sm:col-span-1">
+                <label className="block text-xs text-gray-500 mb-1">Due At</label>
                 <input
-                  type="date"
-                  value={event.dueDate}
-                  onChange={(e) => updateEvent(i, 'dueDate', e.target.value)}
+                  type="datetime-local"
+                  value={toLocalDatetimeString(event.dueAt)}
+                  onChange={(e) => {
+                    const localDt = e.target.value;
+                    if (localDt) {
+                       const iso = new Date(localDt).toISOString();
+                       updateEvent(i, 'dueAt', iso);
+                    }
+                  }}
                   className="w-full text-sm border border-gray-200 rounded px-2 py-1 outline-none focus:border-brand-500"
                 />
               </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Due Time</label>
-                <input
-                  type="time"
-                  value={event.dueTime || ''}
-                  onChange={(e) => updateEvent(i, 'dueTime', e.target.value)}
-                  className="w-full text-sm border border-gray-200 rounded px-2 py-1 outline-none focus:border-brand-500"
-                />
-              </div>
-              <div>
+              <div className="col-span-2 sm:col-span-1">
                 <label className="block text-xs text-gray-500 mb-1">Timezone</label>
                 <input
                   type="text"
@@ -93,9 +90,9 @@ export function ExtractionPreview({ events, clarificationQuestion, onConfirm, on
             <div className="mt-2">
               <span className={cn(
                 'text-xs px-2 py-0.5 rounded-full font-medium',
-                event.confidenceScore >= 0.7 ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
+                event.aiConfidence >= 0.7 ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
               )}>
-                Confidence: {Math.round(event.confidenceScore * 100)}%
+                Confidence: {Math.round(event.aiConfidence * 100)}%
               </span>
             </div>
           </div>

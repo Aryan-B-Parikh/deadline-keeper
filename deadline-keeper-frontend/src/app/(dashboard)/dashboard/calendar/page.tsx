@@ -39,7 +39,15 @@ export default function CalendarPage() {
 
   const getEventsForDay = (day: number) => {
     const dateStr = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    return events.filter((e) => e.dueDate === dateStr);
+    return events.filter((e) => {
+      if (!e.dueAt) return false;
+      try {
+        const localDateStr = new Date(e.dueAt).toLocaleDateString('en-CA', { timeZone: e.timezone });
+        return localDateStr === dateStr;
+      } catch (err) {
+        return e.dueAt.startsWith(dateStr); // fallback
+      }
+    });
   };
 
   const today = new Date();

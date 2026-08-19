@@ -124,11 +124,10 @@ export interface Event {
   id: string;
   title: string;
   type: string;
-  dueDate: string;
-  dueTime: string | null;
+  dueAt: string;
   timezone: string;
   source: string;
-  confidenceScore: number;
+  aiConfidence: number;
   status: string;
   reminderSchedule: string[];
   notes: string | null;
@@ -140,8 +139,7 @@ export interface Event {
 export interface CreateEventInput {
   title: string;
   type: string;
-  dueDate: string;
-  dueTime?: string | null;
+  dueAt: string;
   timezone?: string;
   reminderSchedule?: string[];
   notes?: string | null;
@@ -156,10 +154,9 @@ export interface ExtractionResult {
 export interface ExtractedEvent {
   title: string;
   type: string;
-  dueDate: string;
-  dueTime: string | null;
+  dueAt: string;
   timezone: string | null;
-  confidenceScore: number;
+  aiConfidence: number;
   needsClarification: boolean;
 }
 
@@ -167,8 +164,7 @@ export interface ExtractConfirmInput {
   events: {
     title: string;
     type: string;
-    dueDate: string;
-    dueTime?: string | null;
+    dueAt: string;
     timezone?: string | null;
     reminderSchedule?: string[];
     notes?: string | null;

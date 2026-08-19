@@ -1,16 +1,15 @@
-import { cn, statusColor, typeIcon, sourceIcon, formatDueDate } from '@/lib/utils';
+import { cn, statusColor, typeIcon, sourceIcon, formatDueAt } from '@/lib/utils';
 
 interface EventCardProps {
   event: {
     id: string;
     title: string;
     type: string;
-    dueDate: string;
-    dueTime: string | null;
+    dueAt: string;
     timezone: string;
     source: string;
     status: string;
-    confidenceScore: number;
+    aiConfidence: number;
     notes: string | null;
   };
   onMarkDone?: (id: string) => void;
@@ -27,7 +26,7 @@ export function EventCard({ event, onMarkDone, onSnooze, onDelete }: EventCardPr
           <div className="min-w-0">
             <h3 className="font-medium text-gray-900 truncate">{event.title}</h3>
             <p className="text-sm text-gray-500 mt-0.5">
-              {formatDueDate(event.dueDate, event.dueTime)}
+              {formatDueAt(event.dueAt, event.timezone)}
             </p>
             {event.notes && (
               <p className="text-xs text-gray-400 mt-1 line-clamp-2">{event.notes}</p>
@@ -46,7 +45,7 @@ export function EventCard({ event, onMarkDone, onSnooze, onDelete }: EventCardPr
         <div className="flex items-center gap-2 text-xs text-gray-400">
           <span>{sourceIcon(event.source)}</span>
           <span>{event.source.replace('_', ' ')}</span>
-          {event.confidenceScore < 0.7 && (
+          {event.aiConfidence < 0.7 && (
             <span className="text-amber-500">⚠️ low confidence</span>
           )}
         </div>

@@ -15,8 +15,7 @@ export default function NewEventPage() {
   // Manual form state
   const [title, setTitle] = useState('');
   const [type, setType] = useState('other');
-  const [dueDate, setDueDate] = useState('');
-  const [dueTime, setDueTime] = useState('');
+  const [dueAt, setDueAt] = useState('');
   const [timezone, setTimezone] = useState('UTC');
   const [reminders, setReminders] = useState<string[]>(['7d', '1d', '2h']);
   const [notes, setNotes] = useState('');
@@ -32,11 +31,11 @@ export default function NewEventPage() {
   const handleManualSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      const isoDueAt = new Date(dueAt).toISOString();
       await eventApi.create({
         title,
         type,
-        dueDate,
-        dueTime: dueTime || null,
+        dueAt: isoDueAt,
         timezone,
         reminderSchedule: reminders,
         notes: notes || null,
@@ -88,8 +87,7 @@ export default function NewEventPage() {
         events: events.map((e) => ({
           title: e.title,
           type: e.type,
-          dueDate: e.dueDate,
-          dueTime: e.dueTime,
+          dueAt: e.dueAt,
           timezone: e.timezone,
           reminderSchedule: ['7d', '1d', '2h'],
         })),
@@ -184,22 +182,12 @@ export default function NewEventPage() {
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Due Date *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Due At *</label>
               <input
-                type="date"
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
+                type="datetime-local"
+                value={dueAt}
+                onChange={(e) => setDueAt(e.target.value)}
                 required
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Due Time</label>
-              <input
-                type="time"
-                value={dueTime}
-                onChange={(e) => setDueTime(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none"
               />
             </div>

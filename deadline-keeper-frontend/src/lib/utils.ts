@@ -4,26 +4,41 @@ export function cn(...inputs: ClassValue[]) {
   return clsx(inputs);
 }
 
-export function formatDueDate(date: string, time: string | null): string {
-  const d = new Date(date + 'T00:00:00');
+export function formatDueAt(dueAt: string, timezone: string): string {
+  const d = new Date(dueAt);
   const now = new Date();
-  const diffDays = Math.ceil((d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+  
+  // Calculate difference in days (roughly, based on local time difference for simplicity)
+  const diffTime = d.getTime() - now.getTime();
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
   const dateStr = d.toLocaleDateString('en-US', {
+    timeZone: timezone,
     month: 'short',
     day: 'numeric',
     year: 'numeric',
   });
 
-  const timeStr = time
-    ? ` at ${time}`
-    : '';
+  const timeStr = d.toLocaleTimeString('en-US', {
+    timeZone: timezone,
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  });
 
-  if (diffDays < 0) return `${dateStr}${timeStr} (overdue)`;
-  if (diffDays === 0) return `Today${timeStr}`;
-  if (diffDays === 1) return `Tomorrow${timeStr}`;
-  if (diffDays <= 7) return `In ${diffDays} days — ${dateStr}${timeStr}`;
-  return `${dateStr}${timeStr}`;
+  if (diffDays < 0) return `${dateStr} at ${timeStr} (overdue)`;
+  if (diffDays === 0) return `Today at ${timeStr}`;
+  if (diffDays === 1) return `Tomorrow at ${timeStr}`;
+  if (diffDays <= 7) return `In ${diffDays} days — ${dateStr} at ${timeStr}`;
+  return `${dateStr} at ${timeStr}`;
+}
+
+export function toLocalDatetimeString(isoString: string): string {
+  if (!isoString) return '';
+  const d = new Date(isoString);
+  if (isNaN(d.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 export function statusColor(status: string): string {
