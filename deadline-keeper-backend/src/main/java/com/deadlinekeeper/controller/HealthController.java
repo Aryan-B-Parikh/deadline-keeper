@@ -35,14 +35,12 @@ public class HealthController {
         try (Connection conn = dataSource.getConnection()) {
             if (conn.isValid(2)) {
                 return ResponseEntity.ok(Map.of("status", "UP", "database", "connected"));
-            } else {
-                return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                        .body(Map.of("status", "DOWN", "database", "disconnected"));
             }
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                    .body(Map.of("status", "DOWN", "database", "disconnected"));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                    .body(Map.of("status", "DOWN", "error", e.getMessage()));
+                    .body(Map.of("status", "DOWN", "database", "unavailable"));
         }
     }
 }
-
