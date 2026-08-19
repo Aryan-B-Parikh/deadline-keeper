@@ -30,7 +30,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.io.IOException;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
@@ -95,24 +94,17 @@ public class CalendarSyncService {
         }
     }
 
-    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public UUID consumeStateAndGetUserId(String state) {
-        if (state == null || state.isBlank()) {
-            return null;
-        }
+        if (state == null || state.isBlank()) return null;
 
-        CalendarConnection conn = connectionRepository.findByOauthState(state)
-                .orElse(null);
-
+        CalendarConnection conn = connectionRepository.findByOauthState(state).orElse(null);
         if (conn == null || conn.getOauthStateExpiresAt() == null || Instant.now().isAfter(conn.getOauthStateExpiresAt())) {
             return null;
         }
 
         int consumed = connectionRepository.consumeOauthState(conn.getId(), state);
-        if (consumed == 0) {
-            return null;
-        }
-        return conn.getUserId();
+        return consumed == 1 ? conn.getUserId() : null;
     }
 
     public void handleCallback(UUID userId, String authorizationCode) {
@@ -129,13 +121,13 @@ public class CalendarSyncService {
                     .execute();
 
             CalendarConnection conn = connectionRepository.findByUserId(userId)
-                    .orElse(new CalendarConnection());
-            conn.setUserId(userId);
+                    .orElseThrow(() -> new ResourceNotFoundException("Calendar connection", userId.toString()));
             conn.setProvider("google");
             conn.setEncryptedAccessToken(tokenEncryption.encrypt(tokenResponse.getAccessToken()));
-            conn.setEncryptedRefreshToken(tokenEncryption.encrypt(tokenResponse.getRefreshToken()));
+            if (tokenResponse.getRefreshToken() != null && !tokenResponse.getRefreshToken().isBlank()) {
+                conn.setEncryptedRefreshToken(tokenEncryption.encrypt(tokenResponse.getRefreshToken()));
+            }
             connectionRepository.save(conn);
-
             syncEvents(userId);
         } catch (ExternalServiceException e) {
             throw e;
@@ -146,14 +138,16 @@ public class CalendarSyncService {
     }
 
     public void syncEvents(UUID userId) {
+        syncEvents(userId, false);
+    }
+
+    private void syncEvents(UUID userId, boolean retriedAfterExpiredToken) {
         CalendarConnection conn = connectionRepository.findByUserId(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Calendar connection", userId.toString()));
 
         try {
             Calendar calendarService = buildCalendarService(conn);
-            boolean isInitialSync = conn.getSyncToken() == null;
-
-            if (isInitialSync) {
+            if (conn.getSyncToken() == null) {
                 fullSync(userId, calendarService, conn);
             } else {
                 incrementalSync(userId, calendarService, conn);
@@ -161,23 +155,22 @@ public class CalendarSyncService {
 
             conn.setLastSyncedAt(Instant.now());
             connectionRepository.save(conn);
-
         } catch (Exception e) {
             String msg = e.getMessage() != null ? e.getMessage() : "";
-            if (msg.contains("410") || msg.contains("GONE")) {
-                log.warn("Sync token expired for user {}, performing full resync", userId);
+            if (!retriedAfterExpiredToken && (msg.contains("410") || msg.contains("GONE"))) {
+                log.warn("Sync token expired for user {}, performing one full resync", userId);
                 conn.setSyncToken(null);
                 connectionRepository.save(conn);
-                syncEvents(userId);
+                syncEvents(userId, true);
             } else {
-                throw new ExternalServiceException("Google Calendar",
-                        "Sync failed: " + e.getMessage(), e);
+                throw new ExternalServiceException("Google Calendar", "Sync failed: " + e.getMessage(), e);
             }
         }
     }
 
     private void fullSync(UUID userId, Calendar calendarService, CalendarConnection conn) throws IOException {
         String pageToken = null;
+        String nextSyncToken = null;
 
         do {
             var request = calendarService.events().list("primary")
@@ -185,14 +178,10 @@ public class CalendarSyncService {
                     .setTimeMin(new DateTime(System.currentTimeMillis()))
                     .setSingleEvents(true)
                     .setOrderBy("startTime");
-
-            if (pageToken != null) {
-                request.setPageToken(pageToken);
-            }
+            if (pageToken != null) request.setPageToken(pageToken);
 
             Events events = request.execute();
             List<com.google.api.services.calendar.model.Event> items = events.getItems();
-
             if (items != null) {
                 for (com.google.api.services.calendar.model.Event googleEvent : items) {
                     importGoogleEvent(userId, googleEvent);
@@ -200,14 +189,13 @@ public class CalendarSyncService {
             }
 
             pageToken = events.getNextPageToken();
+            if (events.getNextSyncToken() != null) nextSyncToken = events.getNextSyncToken();
         } while (pageToken != null);
 
-        var syncRequest = calendarService.events().list("primary")
-                .setMaxResults(1)
-                .setSyncToken("1");
-        Events syncEvents = syncRequest.execute();
-        conn.setSyncToken(syncEvents.getNextSyncToken());
-
+        if (nextSyncToken == null) {
+            throw new ExternalServiceException("Google Calendar", "Full sync completed without a sync token");
+        }
+        conn.setSyncToken(nextSyncToken);
         log.info("Full sync completed for user {}", userId);
     }
 
@@ -219,14 +207,10 @@ public class CalendarSyncService {
             var request = calendarService.events().list("primary")
                     .setMaxResults(PAGE_SIZE)
                     .setSyncToken(conn.getSyncToken());
-
-            if (pageToken != null) {
-                request.setPageToken(pageToken);
-            }
+            if (pageToken != null) request.setPageToken(pageToken);
 
             Events events = request.execute();
             List<com.google.api.services.calendar.model.Event> items = events.getItems();
-
             if (items != null) {
                 for (com.google.api.services.calendar.model.Event googleEvent : items) {
                     if ("cancelled".equals(googleEvent.getStatus())) {
@@ -241,28 +225,20 @@ public class CalendarSyncService {
             pageToken = events.getNextPageToken();
         } while (pageToken != null);
 
-        if (nextSyncToken != null) {
-            conn.setSyncToken(nextSyncToken);
-        }
-
+        if (nextSyncToken != null) conn.setSyncToken(nextSyncToken);
         log.info("Incremental sync completed for user {}", userId);
     }
 
     private void importGoogleEvent(UUID userId, com.google.api.services.calendar.model.Event googleEvent) {
         if (googleEvent.getStart() == null || googleEvent.getSummary() == null) return;
-
-        if (!isDeadlineWorthy(googleEvent)) {
-            log.debug("Skipping non-deadline calendar event: {}", googleEvent.getSummary());
-            return;
-        }
+        if (!isDeadlineWorthy(googleEvent)) return;
 
         String externalId = googleEvent.getId();
         Optional<ExternalEvent> existing = externalEventRepository.findByProviderAndExternalId("google", externalId);
-
         if (existing.isPresent()) {
             ExternalEvent ext = existing.get();
             Event event = eventRepository.findById(ext.getDeadlineId()).orElse(null);
-            if (event == null) return;
+            if (event == null || !event.getUserId().equals(userId)) return;
 
             String newEtag = googleEvent.getEtag();
             if (newEtag != null && !newEtag.equals(ext.getEtag())) {
@@ -277,22 +253,17 @@ public class CalendarSyncService {
         Instant dueAt = parseGoogleEventDateTime(googleEvent);
         if (dueAt == null) return;
 
-        String tz = googleEvent.getStart().getTimeZone() != null
-                ? googleEvent.getStart().getTimeZone() : "UTC";
-
-        ZoneId zone;
+        String tz = googleEvent.getStart().getTimeZone() != null ? googleEvent.getStart().getTimeZone() : "UTC";
         try {
-            zone = ZoneId.of(tz);
+            ZoneId.of(tz);
         } catch (Exception e) {
-            zone = ZoneOffset.UTC;
+            tz = "UTC";
         }
-
-        String type = classifyEventType(googleEvent.getSummary());
 
         Event event = new Event();
         event.setUserId(userId);
         event.setTitle(googleEvent.getSummary());
-        event.setType(type);
+        event.setType(classifyEventType(googleEvent.getSummary()));
         event.setDueAt(dueAt);
         event.setTimezone(tz);
         event.setSource("calendar_sync");
@@ -302,10 +273,11 @@ public class CalendarSyncService {
         event.setUserConfirmed(false);
         event.setStatus(statusService.computeStatus(dueAt));
         event.setNotes(googleEvent.getDescription());
+
         Event saved = eventRepository.save(event);
         List<com.deadlinekeeper.dto.ReminderRequest> defaultReminders = List.of(
-            new com.deadlinekeeper.dto.ReminderRequest(86400L, "in_app"),
-            new com.deadlinekeeper.dto.ReminderRequest(7200L, "in_app")
+                new com.deadlinekeeper.dto.ReminderRequest(86400L, "in_app"),
+                new com.deadlinekeeper.dto.ReminderRequest(7200L, "in_app")
         );
         reminderService.syncFromSchedule(saved, defaultReminders);
 
@@ -323,7 +295,7 @@ public class CalendarSyncService {
         if (ext.isPresent()) {
             Event event = eventRepository.findById(ext.get().getDeadlineId()).orElse(null);
             if (event != null && event.getUserId().equals(userId)) {
-                event.setStatus("done");
+                event.setStatus("cancelled");
                 eventRepository.save(event);
             }
             externalEventRepository.delete(ext.get());
@@ -333,9 +305,7 @@ public class CalendarSyncService {
     private boolean isDeadlineWorthy(com.google.api.services.calendar.model.Event googleEvent) {
         String summary = googleEvent.getSummary() != null ? googleEvent.getSummary().toLowerCase() : "";
         String description = googleEvent.getDescription() != null ? googleEvent.getDescription().toLowerCase() : "";
-
-        return DEADLINE_KEYWORDS.stream().anyMatch(keyword ->
-                summary.contains(keyword) || description.contains(keyword));
+        return DEADLINE_KEYWORDS.stream().anyMatch(keyword -> summary.contains(keyword) || description.contains(keyword));
     }
 
     private Instant parseGoogleEventDateTime(com.google.api.services.calendar.model.Event googleEvent) {
@@ -343,10 +313,15 @@ public class CalendarSyncService {
         try {
             if (start.getDateTime() != null) {
                 return Instant.parse(start.getDateTime().toStringRfc3339());
-            } else if (start.getDate() != null) {
+            }
+            if (start.getDate() != null) {
                 LocalDate date = LocalDate.parse(start.getDate().toStringRfc3339().substring(0, 10));
                 String tz = start.getTimeZone() != null ? start.getTimeZone() : "UTC";
-                return date.atTime(LocalTime.MAX).atZone(ZoneId.of(tz)).toInstant();
+                try {
+                    return date.atTime(LocalTime.MAX).atZone(ZoneId.of(tz)).toInstant();
+                } catch (Exception ignored) {
+                    return date.atTime(LocalTime.MAX).atZone(ZoneOffset.UTC).toInstant();
+                }
             }
         } catch (Exception e) {
             log.warn("Failed to parse calendar event datetime: {}", e.getMessage());
@@ -356,17 +331,9 @@ public class CalendarSyncService {
 
     private String classifyEventType(String summary) {
         String lower = summary.toLowerCase();
-        if (lower.contains("exam") || lower.contains("test") || lower.contains("quiz")
-                || lower.contains("midterm") || lower.contains("final")) {
-            return "exam";
-        }
-        if (lower.contains("assignment") || lower.contains("homework")
-                || lower.contains("project") || lower.contains("submission")) {
-            return "submission";
-        }
-        if (lower.contains("hackathon")) {
-            return "hackathon";
-        }
+        if (lower.contains("exam") || lower.contains("test") || lower.contains("quiz") || lower.contains("midterm") || lower.contains("final")) return "exam";
+        if (lower.contains("assignment") || lower.contains("homework") || lower.contains("project") || lower.contains("submission")) return "submission";
+        if (lower.contains("hackathon")) return "hackathon";
         return "other";
     }
 
@@ -404,7 +371,6 @@ public class CalendarSyncService {
     }
 
     public void disconnect(UUID userId) {
-        connectionRepository.findByUserId(userId)
-                .ifPresent(connectionRepository::delete);
+        connectionRepository.findByUserId(userId).ifPresent(connectionRepository::delete);
     }
 }
