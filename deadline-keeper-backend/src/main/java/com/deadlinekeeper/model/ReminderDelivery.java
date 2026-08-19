@@ -34,12 +34,6 @@ public class ReminderDelivery {
     @Column(nullable = false)
     private String status = "pending";
 
-    @Column(name = "attempt_count")
-    private Integer attemptCount = 0;
-
-    @Column(name = "provider_message_id")
-    private String providerMessageId;
-
     @Column(name = "last_error")
     private String lastError;
 
