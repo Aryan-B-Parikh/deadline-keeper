@@ -1,38 +1,25 @@
 # DeadlineKeeper — REST API Reference
 
-Base URL: `http://localhost:8080`
+Development base URL: `http://localhost:8080`. Production uses configured `APP_BASE_URL`.
 
-All authenticated endpoints require a Supabase JWT in the `Authorization` header:
+All authenticated endpoints require a Supabase JWT in the `Authorization` header.
 
-```http
-Authorization: Bearer <supabase-access-token>
-```
+## Health
 
-## Health Check
-
-### `GET /api/health`
-
-No authentication required. Returns service status.
-
-```json
-{ "status": "ok" }
-```
+- `GET /api/health` — public basic service health.
+- `GET /api/health/liveness` — public process liveness check.
+- `GET /api/health/readiness` — public database readiness check; raw database errors are not exposed.
 
 ## Events
 
 ### `GET /api/events`
-
-List the authenticated user's events.
-
-**Query parameters:** `status` — `upcoming`, `due_soon`, `overdue`, or `done`.
+List the authenticated user's events. Optional `status`: `upcoming`, `due_soon`, `overdue`, or `done`.
 
 ### `GET /api/events/{id}`
-
 Get one event owned by the authenticated user.
 
 ### `POST /api/events`
-
-Create an event.
+Create an event using the canonical representation:
 
 ```json
 {
@@ -48,128 +35,58 @@ Create an event.
 }
 ```
 
-| Field | Required | Description |
-|---|---|---|
-| `title` | yes | Event title |
-| `type` | yes | `exam`, `submission`, `hackathon`, or `other` |
-| `dueAt` | yes | ISO-8601 timestamp representing the canonical UTC instant |
-| `timezone` | no | IANA timezone used for display; defaults to `UTC` |
-| `reminders` | no | Reminder definitions for the event |
-| `notes` | no | Free-text notes |
+`dueAt` is required and is the canonical instant. `timezone` is optional and defaults to `UTC`. Reminders are first-class reminder definitions.
 
 ### `PUT /api/events/{id}`
-
-Replace the editable event fields. Uses the same request shape as `POST /api/events`.
+Replace editable event fields using the same request shape as POST.
 
 ### `DELETE /api/events/{id}`
-
-Delete an event and its dependent reminders/deliveries according to the database foreign-key rules.
+Delete an owned event and dependent reminder data according to database foreign-key rules.
 
 ### `POST /api/events/{id}/done`
-
 Mark an event as done.
 
 ### `POST /api/events/{id}/snooze`
-
-Move the canonical `dueAt` forward.
-
-```json
-{ "duration": "1d" }
-```
-
-Supported duration suffixes: `d`, `h`, `m`.
+Move `dueAt` forward. Example: `{ "duration": "1d" }`. Supported suffixes: `d`, `h`, `m`.
 
 ## Extraction
 
-### `POST /api/events/extract`
+- `POST /api/events/extract` — multipart screenshot or pasted text extraction.
+- `POST /api/events/extract/confirm` — persist user-confirmed extracted events.
 
-Extract deadlines from a screenshot or pasted text using the configured AI provider.
-
-**Content-Type:** `multipart/form-data`
-
-| Field | Type | Description |
-|---|---|---|
-| `screenshot` | file | PNG/JPEG/etc. |
-| `pastedText` | string | Text containing deadline information |
-
-Provide either `screenshot` or `pastedText`.
-
-Extraction results use the same canonical event representation, including `dueAt`, `timezone`, and `aiConfidence`.
-
-### `POST /api/events/extract/confirm`
-
-Persist events after the user confirms the extraction preview. Confirmed event objects use the canonical `dueAt`/`timezone` representation and may include `reminders` and `notes`.
+Extraction results use `dueAt`, `timezone`, and `aiConfidence`.
 
 ## Notifications
 
-### `GET /api/notifications`
+- `GET /api/notifications?unreadOnly=false`
+- `POST /api/notifications/{id}/read`
+- `GET /api/notifications/unread-count`
 
-List notifications for the authenticated user.
-
-**Query parameter:** `unreadOnly` — boolean, default `false`.
-
-### `POST /api/notifications/{id}/read`
-
-Mark a notification as read.
-
-### `GET /api/notifications/unread-count`
-
-Return the authenticated user's unread notification count.
-
-```json
-{ "count": 3 }
-```
+All notification queries are scoped to the authenticated user.
 
 ## User Profile
 
-### `GET /api/user/profile`
+- `GET /api/user/profile`
+- `PUT /api/user/profile`
 
-Return the authenticated user's profile.
+Profile updates include display name, IANA timezone, and notification preferences.
 
-### `PUT /api/user/profile`
+## Google Calendar
 
-Update the authenticated user's profile. Supported profile fields include display name, IANA timezone, and notification preferences.
-
-## Google Calendar Sync
-
-### `GET /api/calendar/sync/start`
-
-Initiate Google OAuth for the authenticated user. Returns a `302` redirect to Google's authorization page. The generated OAuth state is single-use and expires after a short period.
-
-### `GET /api/calendar/sync/callback`
-
-OAuth callback. Requires the `code` and single-use `state` parameters supplied by Google.
-
-```json
-{ "status": "connected" }
-```
-
-### `POST /api/calendar/sync/trigger`
-
-Trigger a calendar sync for the authenticated user.
-
-### `DELETE /api/calendar/sync`
-
-Disconnect Google Calendar for the authenticated user.
+- `GET /api/calendar/sync/start` — authenticated OAuth initiation; returns a redirect.
+- `GET /api/calendar/sync/callback` — consumes the single-use OAuth state and exchanges the authorization code.
+- `POST /api/calendar/sync/trigger` — sync the authenticated user's calendar.
+- `DELETE /api/calendar/sync` — disconnect the authenticated user's calendar.
 
 ## Inbox Webhook
 
-### `POST /api/inbox/webhook/{token}`
+`POST /api/inbox/webhook/{token}` accepts the SendGrid Inbound Parse payload. The configured token is required and is compared using a constant-time comparison. The endpoint fails closed when the token is not configured.
 
-SendGrid Inbound Parse webhook endpoint. The token is validated using a constant-time comparison and must be configured server-side.
+## Notification delivery semantics
 
-**Content-Type:** `application/x-www-form-urlencoded`
+Notification processing is **at least once**. PostgreSQL atomically assigns outbox jobs with `FOR UPDATE SKIP LOCKED`, worker leases protect ownership, and a watchdog recovers crashed workers. A deterministic `idempotency_key` is attached to SendGrid custom arguments for reconciliation and webhook correlation; it is not a provider-side exactly-once guarantee.
 
-| Param | Description |
-|---|---|
-| `from` | Sender email address |
-| `subject` | Email subject |
-| `text` | Plain-text body |
-| `html` | HTML body |
-
-## Error Responses
-
-Errors use a structured envelope with a request ID for server-side correlation.
+## Error envelope
 
 ```json
 {
@@ -181,15 +98,4 @@ Errors use a structured envelope with a request ID for server-side correlation.
 }
 ```
 
-Common statuses:
-
-| Status | Meaning |
-|---|---|
-| `400` | Invalid request or OAuth state |
-| `401` | Missing/invalid authentication or webhook token |
-| `403` | Authenticated user is not authorized for the resource |
-| `404` | Resource not found |
-| `409` | Database uniqueness/constraint conflict |
-| `422` | Validation failure |
-| `502` | External provider failure |
-| `500` | Unexpected server failure |
+Common statuses: `400` invalid request/state, `401` unauthenticated/invalid webhook token, `403` unauthorized resource, `404` not found, `409` constraint conflict, `422` validation failure, `502` external provider failure, `500` unexpected server failure.
