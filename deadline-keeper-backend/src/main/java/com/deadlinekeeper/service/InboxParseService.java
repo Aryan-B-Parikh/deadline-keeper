@@ -53,7 +53,7 @@ public class InboxParseService {
         }
 
         List<ExtractionResult.ExtractedEvent> highConfidenceEvents = result.getEvents().stream()
-                .filter(e -> e.getConfidenceScore() >= 0.7f)
+                .filter(e -> e.getAiConfidence() >= 0.7f)
                 .toList();
 
         if (highConfidenceEvents.isEmpty()) {
@@ -68,13 +68,12 @@ public class InboxParseService {
         confirmRequest.setSourceReference(ref);
 
         List<ExtractConfirmRequest.ConfirmedEvent> confirmedEvents = highConfidenceEvents.stream()
-                .filter(e -> e.getDueDate() != null)
+                .filter(e -> e.getDueAt() != null)
                 .map(e -> {
                     ExtractConfirmRequest.ConfirmedEvent confirmed = new ExtractConfirmRequest.ConfirmedEvent();
                     confirmed.setTitle(e.getTitle());
                     confirmed.setType(e.getType());
-                    confirmed.setDueDate(e.getDueDate());
-                    confirmed.setDueTime(e.getDueTime());
+                    confirmed.setDueAt(e.getDueAt());
                     confirmed.setTimezone(e.getTimezone());
                     confirmed.setReminders(List.of(
                             new com.deadlinekeeper.dto.ReminderRequest(604800L, "email"), // 7d
@@ -101,10 +100,9 @@ public class InboxParseService {
         String title = "✅ DeadlineKeeper: %d deadline(s) added".formatted(events.size());
         StringBuilder message = new StringBuilder("The following deadlines were extracted from your email:\n\n");
         for (EventResponse event : events) {
-            message.append("• %s — Due: %s%s\n".formatted(
+            message.append("• %s — Due: %s\n".formatted(
                     event.getTitle(),
-                    event.getDueDate(),
-                    event.getDueTime() != null ? " at " + event.getDueTime() : ""
+                    event.getDueAt()
             ));
         }
 

@@ -23,10 +23,7 @@ public class ExtractConfirmRequest {
         private String title;
         private String type;
         private Instant dueAt;
-        @Deprecated
-        private LocalDate dueDate; // legacy
-        @Deprecated
-        private LocalTime dueTime; // legacy
+
         private String timezone;
 
         private List<ReminderRequest> reminders;

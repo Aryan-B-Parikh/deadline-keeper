@@ -68,8 +68,8 @@ public class ExtractionService {
             if (confirmed.getTitle() == null || confirmed.getTitle().isBlank()) {
                 throw new ValidationException("Event title is required");
             }
-            if (confirmed.getDueAt() == null && confirmed.getDueDate() == null) {
-                throw new ValidationException("Due date or dueAt is required for event: " + confirmed.getTitle());
+            if (confirmed.getDueAt() == null) {
+                throw new ValidationException("DueAt is required for event: " + confirmed.getTitle());
             }
 
             String tz = confirmed.getTimezone() != null ? confirmed.getTimezone() : "UTC";
@@ -82,11 +82,6 @@ public class ExtractionService {
             }
 
             Instant dueAt = confirmed.getDueAt();
-            if (dueAt == null) {
-                LocalTime time = confirmed.getDueTime() != null ? confirmed.getDueTime() : LocalTime.of(23, 59);
-                dueAt = LocalDateTime.of(confirmed.getDueDate(), time)
-                        .atZone(zone).toInstant();
-            }
 
             Event event = new Event();
             event.setUserId(userId);
@@ -156,21 +151,18 @@ public class ExtractionService {
                         .title(getTextOrDefault(eventNode, "title", "Untitled Event"))
                         .type(getTextOrDefault(eventNode, "type", "other"))
                         .dueAt(computedDueAt)
-                        .dueDate(parsedDate)
-                        .dueTime(parsedTime)
                         .timezone(parsedZone)
-                        .confidenceScore(conf)
                         .aiConfidence(conf)
                         .needsClarification(eventNode.has("needs_clarification")
                                 && eventNode.get("needs_clarification").asBoolean())
                         .build();
 
                 // Skip events with no date — they can't be deadlines
-                if (extracted.getDueDate() == null) {
+                if (extracted.getDueAt() == null) {
                     continue;
                 }
 
-                if (extracted.isNeedsClarification() || extracted.getConfidenceScore() < 0.7f) {
+                if (extracted.isNeedsClarification() || extracted.getAiConfidence() < 0.7f) {
                     needsConfirmation = true;
                 }
 

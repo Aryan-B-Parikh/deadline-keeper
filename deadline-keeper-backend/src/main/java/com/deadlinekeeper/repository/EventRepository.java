@@ -30,8 +30,6 @@ public interface EventRepository extends JpaRepository<Event, UUID> {
     @Query("SELECT e FROM Event e WHERE e.status IN ('upcoming','due_soon','overdue') AND e.dueAt BETWEEN :from AND :to")
     List<Event> findActiveBetween(@Param("from") Instant from, @Param("to") Instant to);
 
-    @Query("SELECT e FROM Event e WHERE e.status != 'done' AND e.dueDate <= :date")
-    List<Event> findUpcomingEventsBefore(@Param("date") LocalDate date);
 
     @Query("SELECT e FROM Event e WHERE e.status IN ('upcoming', 'due_soon')")
     List<Event> findAllActiveEvents();

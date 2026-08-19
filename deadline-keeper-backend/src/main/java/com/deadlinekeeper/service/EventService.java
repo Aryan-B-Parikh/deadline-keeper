@@ -59,7 +59,7 @@ public class EventService {
 
         String timezone = request.getTimezone() != null ? request.getTimezone() : "UTC";
         event.setTimezone(timezone);
-        event.setDueAt(eventMapper.resolveCanonicalDueAt(request));
+        event.setDueAt(request.getDueAt());
 
         event.setSource("manual");
         event.setAiConfidence(null); // Explicitly null for manual
@@ -82,7 +82,7 @@ public class EventService {
         if (request.getTimezone() != null) event.setTimezone(request.getTimezone());
         event.setNotes(request.getNotes());
 
-        event.setDueAt(eventMapper.resolveCanonicalDueAt(request));
+        event.setDueAt(request.getDueAt());
 
         if (!event.getStatus().equals("done")) {
             event.setStatus(deadlineStatusService.computeStatus(event.getDueAt(), event.getStatus()));

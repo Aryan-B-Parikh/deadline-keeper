@@ -15,15 +15,9 @@ public class EventResponse {
     private UUID id;
     private String title;
     private String type;
-    @Deprecated
-    private LocalDate dueDate; // legacy
-    @Deprecated
-    private LocalTime dueTime; // legacy
     private Instant dueAt;
     private String timezone;
     private String source;
-    @Deprecated
-    private Float confidenceScore; // legacy
     private Float aiConfidence;
     private String status;
 

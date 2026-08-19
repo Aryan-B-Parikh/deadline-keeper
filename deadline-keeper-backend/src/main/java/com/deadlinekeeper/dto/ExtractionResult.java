@@ -21,13 +21,7 @@ public class ExtractionResult {
         private String title;
         private String type;
         private Instant dueAt;
-        @Deprecated
-        private LocalDate dueDate; // legacy
-        @Deprecated
-        private LocalTime dueTime; // legacy
         private String timezone;
-        @Deprecated
-        private float confidenceScore; // legacy
         private Float aiConfidence;
         private boolean needsClarification;
     }

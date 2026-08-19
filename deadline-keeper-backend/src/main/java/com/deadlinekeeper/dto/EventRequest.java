@@ -24,10 +24,7 @@ public class EventRequest {
 
     private Instant dueAt;
 
-    // Input convenience fields — dueAt is computed from these + timezone (legacy)
-    private LocalDate dueDate;
 
-    private LocalTime dueTime;
 
     private String timezone;
 
