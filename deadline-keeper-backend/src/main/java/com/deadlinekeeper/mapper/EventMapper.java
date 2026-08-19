@@ -1,6 +1,6 @@
 package com.deadlinekeeper.mapper;
 
-import com.deadlinekeeper.dto.EventRequest;
+
 import com.deadlinekeeper.dto.EventResponse;
 import com.deadlinekeeper.model.Event;
 import org.springframework.stereotype.Component;
@@ -11,11 +11,11 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 @Component
-public class EventCompatibilityMapper {
+public class EventMapper {
 
     private final ReminderRepository reminderRepository;
 
-    public EventCompatibilityMapper(ReminderRepository reminderRepository) {
+    public EventMapper(ReminderRepository reminderRepository) {
         this.reminderRepository = reminderRepository;
     }
 
@@ -32,7 +32,7 @@ public class EventCompatibilityMapper {
                 .dueAt(event.getDueAt())
                 .timezone(event.getTimezone())
                 .source(event.getSource())
-                .aiConfidence(event.getAiConfidence() != null ? event.getAiConfidence() : 1.0f)
+                .aiConfidence(event.getAiConfidence())
                 .status(event.getStatus())
                 .reminders(reminders)
                 .notes(event.getNotes())

@@ -7,8 +7,6 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.time.Instant;
-import java.time.LocalDate;
-import java.time.LocalTime;
 import java.util.List;
 
 @Getter
@@ -22,13 +20,10 @@ public class EventRequest {
     @NotBlank(message = "Type is required")
     private String type;
 
+    @NotNull(message = "DueAt is required")
     private Instant dueAt;
 
-
-
     private String timezone;
-
-
 
     private List<ReminderRequest> reminders;
 

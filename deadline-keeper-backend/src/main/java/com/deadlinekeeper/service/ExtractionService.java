@@ -14,7 +14,6 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
@@ -30,17 +29,17 @@ public class ExtractionService {
     private final EventRepository eventRepository;
     private final DeadlineStatusService deadlineStatusService;
     private final ReminderService reminderService;
-    private final com.deadlinekeeper.mapper.EventCompatibilityMapper eventCompatibilityMapper;
+    private final com.deadlinekeeper.mapper.EventMapper eventMapper;
 
     public ExtractionService(GeminiClient geminiClient, EventRepository eventRepository,
                              DeadlineStatusService deadlineStatusService,
                              ReminderService reminderService,
-                             com.deadlinekeeper.mapper.EventCompatibilityMapper eventCompatibilityMapper) {
+                             com.deadlinekeeper.mapper.EventMapper eventMapper) {
         this.geminiClient = geminiClient;
         this.eventRepository = eventRepository;
         this.deadlineStatusService = deadlineStatusService;
         this.reminderService = reminderService;
-        this.eventCompatibilityMapper = eventCompatibilityMapper;
+        this.eventMapper = eventMapper;
     }
 
     public ExtractionResult extractFromText(String text) {
@@ -112,7 +111,7 @@ public class ExtractionService {
             if (confirmed.getReminders() != null) {
                 reminderService.syncFromSchedule(saved, confirmed.getReminders());
             }
-            responses.add(eventCompatibilityMapper.toResponse(saved));
+            responses.add(eventMapper.toResponse(saved));
         }
 
         return responses;

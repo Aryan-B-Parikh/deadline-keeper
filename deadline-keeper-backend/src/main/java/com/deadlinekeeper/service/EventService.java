@@ -3,17 +3,14 @@ package com.deadlinekeeper.service;
 import com.deadlinekeeper.dto.EventRequest;
 import com.deadlinekeeper.dto.EventResponse;
 import com.deadlinekeeper.exception.ResourceNotFoundException;
-import com.deadlinekeeper.mapper.EventCompatibilityMapper;
+import com.deadlinekeeper.mapper.EventMapper;
 import com.deadlinekeeper.model.Event;
 import com.deadlinekeeper.repository.EventRepository;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.time.LocalDate;
-import java.time.LocalTime;
 import java.time.ZoneId;
-import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 
@@ -23,12 +20,12 @@ public class EventService {
     private final EventRepository eventRepository;
     private final DeadlineStatusService deadlineStatusService;
     private final ReminderService reminderService;
-    private final EventCompatibilityMapper eventMapper;
+    private final EventMapper eventMapper;
 
     public EventService(EventRepository eventRepository,
                         DeadlineStatusService deadlineStatusService,
                         ReminderService reminderService,
-                        EventCompatibilityMapper eventMapper) {
+                        EventMapper eventMapper) {
         this.eventRepository = eventRepository;
         this.deadlineStatusService = deadlineStatusService;
         this.reminderService = reminderService;
@@ -58,6 +55,11 @@ public class EventService {
         event.setType(request.getType());
 
         String timezone = request.getTimezone() != null ? request.getTimezone() : "UTC";
+        try {
+            ZoneId.of(timezone);
+        } catch (Exception e) {
+            throw new com.deadlinekeeper.exception.ValidationException("Invalid timezone: " + timezone);
+        }
         event.setTimezone(timezone);
         event.setDueAt(request.getDueAt());
 
@@ -79,7 +81,13 @@ public class EventService {
 
         event.setTitle(request.getTitle());
         event.setType(request.getType());
-        if (request.getTimezone() != null) event.setTimezone(request.getTimezone());
+        String timezone = request.getTimezone() != null ? request.getTimezone() : "UTC";
+        try {
+            ZoneId.of(timezone);
+        } catch (Exception e) {
+            throw new com.deadlinekeeper.exception.ValidationException("Invalid timezone: " + timezone);
+        }
+        event.setTimezone(timezone);
         event.setNotes(request.getNotes());
 
         event.setDueAt(request.getDueAt());
@@ -121,8 +129,6 @@ public class EventService {
         return eventMapper.toResponse(saved);
     }
 
-
-
     private Duration parseDuration(String duration) {
         if (duration.endsWith("d")) {
             return Duration.ofDays(Long.parseLong(duration.replace("d", "")));
@@ -133,6 +139,4 @@ public class EventService {
         }
         return Duration.ofDays(1);
     }
-
-
 }
