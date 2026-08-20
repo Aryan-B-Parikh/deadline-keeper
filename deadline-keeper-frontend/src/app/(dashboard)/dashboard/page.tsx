@@ -15,6 +15,7 @@ export default function DashboardPage() {
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [mutationError, setMutationError] = useState<string | null>(null);
   const [filter, setFilter] = useState<StatusFilter>('all');
 
   const fetchEvents = useCallback(async () => {
@@ -24,8 +25,7 @@ export default function DashboardPage() {
     try {
       const data = await eventApi.list();
       setEvents(data);
-    } catch (err: any) {
-      console.error('Failed to fetch events:', err);
+    } catch (err: unknown) {
       setError('Unable to load deadlines. Please try again.');
     } finally {
       setLoading(false);
@@ -37,30 +37,33 @@ export default function DashboardPage() {
   }, [authLoading, user, fetchEvents]);
 
   const handleMarkDone = async (id: string) => {
+    setMutationError(null);
     try {
       await eventApi.markDone(id);
       await fetchEvents();
-    } catch (err) {
-      console.error('Failed to mark done:', err);
+    } catch (err: unknown) {
+      setMutationError(err instanceof Error ? err.message : 'Failed to mark deadline as done');
     }
   };
 
   const handleSnooze = async (id: string) => {
+    setMutationError(null);
     try {
       await eventApi.snooze(id, '1d');
       await fetchEvents();
-    } catch (err) {
-      console.error('Failed to snooze:', err);
+    } catch (err: unknown) {
+      setMutationError(err instanceof Error ? err.message : 'Failed to snooze deadline');
     }
   };
 
   const handleDelete = async (id: string) => {
     if (!confirm('Delete this event?')) return;
+    setMutationError(null);
     try {
       await eventApi.delete(id);
       await fetchEvents();
-    } catch (err) {
-      console.error('Failed to delete:', err);
+    } catch (err: unknown) {
+      setMutationError(err instanceof Error ? err.message : 'Failed to delete deadline');
     }
   };
 
@@ -89,7 +92,6 @@ export default function DashboardPage() {
     <div className="space-y-6">
       {/* Compact Hero Section */}
       <section className="relative overflow-hidden bg-glass rounded-2xl border border-border-subtle p-6 sm:p-8 shadow-sm">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-brand/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 pointer-events-none" />
         
         <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
           <div>
@@ -150,6 +152,17 @@ export default function DashboardPage() {
 
       {/* Content Area */}
       <div className="min-h-[400px]">
+        {mutationError && (
+          <div className="mb-4 p-3 bg-danger/10 border border-danger/20 rounded-xl text-danger text-sm flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-4 h-4" />
+              <span>{mutationError}</span>
+            </div>
+            <button onClick={() => setMutationError(null)} className="opacity-70 hover:opacity-100">
+              ✕
+            </button>
+          </div>
+        )}
         {error ? (
           <div className="flex flex-col items-center justify-center py-20 px-4 text-center bg-surface border border-border-subtle rounded-xl">
             <AlertCircle className="w-10 h-10 text-danger mb-4 opacity-80" />

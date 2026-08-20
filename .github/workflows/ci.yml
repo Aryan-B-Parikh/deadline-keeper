@@ -43,7 +43,7 @@ jobs:
 
       - name: Lint
         working-directory: ./deadline-keeper-frontend
-        run: npm run lint --if-present
+        run: npm run lint
 
       - name: Build
         working-directory: ./deadline-keeper-frontend

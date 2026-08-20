@@ -33,32 +33,31 @@
     --danger: 220 38 38;        /* red-600 */
   }
 
-  /* (Optional) Dark Mode Definitions */
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --background: 10 10 12;
-      --foreground: 245 245 245;
+  /* Dark Mode has been explicitly disabled to enforce the Neo-Minimal Light Glass UI */
+  .dark {
+    /* If dark mode is re-enabled later, it should be controlled via a class toggle */
+    --background: 10 10 12;
+    --foreground: 245 245 245;
 
-      --surface: 18 18 20;
-      --surface-hover: 24 24 28;
-      --surface-elevated: 24 24 28;
-      --surface-glass: 20 20 22;
+    --surface: 18 18 20;
+    --surface-hover: 24 24 28;
+    --surface-elevated: 24 24 28;
+    --surface-glass: 20 20 22;
 
-      --text-primary: 245 245 245;
-      --text-secondary: 163 163 163;
-      --text-muted: 115 115 115;
+    --text-primary: 245 245 245;
+    --text-secondary: 163 163 163;
+    --text-muted: 115 115 115;
 
-      --border-subtle: 38 38 43;
-      --border-strong: 63 63 70;
-      --border-glass: 255 255 255;
+    --border-subtle: 38 38 43;
+    --border-strong: 63 63 70;
+    --border-glass: 255 255 255;
 
-      --primary: 99 102 241;       /* indigo-500 */
-      --primary-hover: 129 140 248;/* indigo-400 */
-      
-      --success: 34 197 94;        /* green-500 */
-      --warning: 245 158 11;       /* amber-500 */
-      --danger: 239 68 68;         /* red-500 */
-    }
+    --primary: 99 102 241;       /* indigo-500 */
+    --primary-hover: 129 140 248;/* indigo-400 */
+    
+    --success: 34 197 94;        /* green-500 */
+    --warning: 245 158 11;       /* amber-500 */
+    --danger: 239 68 68;         /* red-500 */
   }
 }
 

@@ -60,7 +60,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200",
+                  "flex items-center gap-3 px-3 py-3 min-h-[44px] rounded-xl text-sm font-medium transition-all duration-200",
                   active 
                     ? "bg-surface-elevated text-brand shadow-sm border border-border-subtle" 
                     : "text-text-secondary hover:bg-surface-hover hover:text-text-primary"
@@ -110,9 +110,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <span className="font-bold text-lg text-text-primary">DeadlineKeeper</span>
             </Link>
             <div className="flex items-center gap-3">
-              <Link href="/dashboard/notifications" className="text-text-secondary hover:text-text-primary p-2">
-                <Bell className="w-5 h-5" />
-              </Link>
               <div className="w-8 h-8 bg-brand-50 text-brand rounded-full flex items-center justify-center text-sm font-medium">
                 {user?.email?.charAt(0).toUpperCase() || '?'}
               </div>
@@ -120,19 +117,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
         </header>
 
-        {/* Desktop Top Header (Subtle) */}
+        {/* Desktop Top Header (Subtle) - Removed dead notifications link */}
         <header className={cn(
           "hidden md:flex sticky top-0 z-30 h-16 items-center justify-end px-8 transition-all duration-200",
           scrolled ? "bg-glass border-b border-border-subtle shadow-sm" : "bg-transparent"
         )}>
-          <Link 
-            href="/dashboard/notifications" 
-            className="relative text-text-secondary hover:text-brand transition-colors p-2 rounded-full hover:bg-surface-hover"
-            aria-label="Notifications"
-          >
-            <Bell className="w-5 h-5" />
-            {/* Optional dot indicator could go here */}
-          </Link>
         </header>
 
         {/* Page Content */}
@@ -153,7 +142,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  "flex flex-col items-center justify-center w-full h-full gap-1 transition-colors",
+                  "flex flex-col items-center justify-center min-w-[44px] min-h-[44px] w-full h-full gap-1 transition-colors",
                   active ? "text-brand" : "text-text-secondary hover:text-text-primary"
                 )}
               >
