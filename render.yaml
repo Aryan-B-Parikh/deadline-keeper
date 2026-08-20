@@ -1,0 +1,32 @@
+services:
+  - type: web
+    name: deadline-keeper-backend
+    env: docker
+    rootDir: deadline-keeper-backend
+    dockerContext: deadline-keeper-backend
+    dockerfilePath: Dockerfile
+    plan: free
+    healthCheckPath: /api/health/liveness
+    envVars:
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_JWT_SECRET
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: SENDGRID_API_KEY
+        sync: false
+      - key: SENDGRID_FROM_EMAIL
+        sync: false
+      - key: SENDGRID_INBOX_PARSE_DOMAIN
+        sync: false
+      - key: GOOGLE_CALENDAR_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CALENDAR_CLIENT_SECRET
+        sync: false
+      - key: APP_BASE_URL
+        sync: false
+      - key: APP_ENCRYPTION_KEY
+        sync: false
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false
