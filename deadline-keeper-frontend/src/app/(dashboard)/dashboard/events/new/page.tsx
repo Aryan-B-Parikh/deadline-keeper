@@ -5,6 +5,8 @@ import { eventApi, type ExtractionResult, type ExtractedEvent, type ReminderInpu
 import { ExtractionPreview } from '@/components/ExtractionPreview';
 import { ReminderConfig } from '@/components/ReminderConfig';
 import { useRouter } from 'next/navigation';
+import { cn } from '@/lib/utils';
+import { Edit3, Image as ImageIcon, FileText, Loader2, Calendar } from 'lucide-react';
 
 type InputTab = 'manual' | 'screenshot' | 'paste';
 
@@ -107,6 +109,9 @@ export default function NewEventPage() {
     }
   };
 
+  const inputClasses = "w-full px-4 py-2.5 bg-surface-elevated border border-border-strong rounded-xl text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand transition-all shadow-sm";
+  const labelClasses = "block text-sm font-medium text-text-secondary mb-1.5 ml-1";
+
   if (extractionResult) {
     return (
       <div className="max-w-2xl mx-auto">
@@ -121,103 +126,136 @@ export default function NewEventPage() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto">
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">Add Deadline</h1>
-
-      <div className="flex border-b border-gray-200 mb-6 overflow-x-auto">
-        {[
-          { key: 'manual', label: '✏️ Manual' },
-          { key: 'screenshot', label: '📸 Screenshot' },
-          { key: 'paste', label: '📋 Paste Text' },
-        ].map(({ key, label }) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => setTab(key as InputTab)}
-            aria-selected={tab === key}
-            role="tab"
-            className={`px-4 py-2 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
-              tab === key
-                ? 'border-brand-600 text-brand-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            {label}
-          </button>
-        ))}
+    <div className="max-w-2xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 rounded-xl bg-brand/10 text-brand flex items-center justify-center">
+          <Calendar className="w-5 h-5" />
+        </div>
+        <div>
+          <h1 className="text-2xl font-bold text-text-primary tracking-tight">Add Deadline</h1>
+          <p className="text-sm text-text-secondary">Track a new assignment or event</p>
+        </div>
       </div>
 
-      {tab === 'manual' && (
-        <form onSubmit={handleManualSubmit} className="space-y-4">
-          <div>
-            <label htmlFor="event-title" className="block text-sm font-medium text-gray-700 mb-1">Title *</label>
-            <input id="event-title" type="text" value={title} onChange={(e) => setTitle(e.target.value)} required maxLength={200} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none" placeholder="e.g., CS101 Final Exam" />
+      <div className="bg-surface border border-border-subtle rounded-2xl shadow-sm overflow-hidden relative">
+        {extracting && (
+          <div className="absolute inset-0 z-50 bg-surface/60 backdrop-blur-sm flex flex-col items-center justify-center rounded-2xl">
+            <Loader2 className="w-8 h-8 text-brand animate-spin mb-3" />
+            <p className="font-medium text-text-primary">Extracting deadlines...</p>
+            <p className="text-sm text-text-secondary">Using AI to analyze your input</p>
           </div>
+        )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label htmlFor="event-type" className="block text-sm font-medium text-gray-700 mb-1">Type *</label>
-              <select id="event-type" value={type} onChange={(e) => setType(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none">
-                <option value="exam">📝 Exam</option>
-                <option value="submission">📋 Submission</option>
-                <option value="hackathon">💻 Hackathon</option>
-                <option value="other">📌 Other</option>
-              </select>
-            </div>
-
-            <div>
-              <label htmlFor="event-timezone" className="block text-sm font-medium text-gray-700 mb-1">Timezone</label>
-              <input id="event-timezone" type="text" value={timezone} readOnly aria-describedby="event-timezone-help" className="w-full px-3 py-2 border border-gray-200 bg-gray-50 text-gray-600 rounded-lg outline-none" />
-              <p id="event-timezone-help" className="text-xs text-gray-400 mt-1">Uses your device timezone for this local date/time.</p>
-            </div>
-          </div>
-
-          <div>
-            <label htmlFor="event-due-at" className="block text-sm font-medium text-gray-700 mb-1">Due At *</label>
-            <input id="event-due-at" type="datetime-local" value={dueAt} onChange={(e) => setDueAt(e.target.value)} required className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none" />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Reminders</label>
-            <ReminderConfig value={reminders} onChange={setReminders} />
-          </div>
-
-          <div>
-            <label htmlFor="event-notes" className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
-            <textarea id="event-notes" value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} maxLength={2000} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none resize-none" placeholder="Any additional notes..." />
-          </div>
-
-          <div className="flex flex-col sm:flex-row gap-3">
-            <button type="submit" className="flex-1 bg-brand-600 text-white py-2 px-4 rounded-lg hover:bg-brand-700 transition-colors font-medium">Save Event</button>
-            <button type="button" onClick={() => router.push('/dashboard')} className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors">Cancel</button>
-          </div>
-        </form>
-      )}
-
-      {tab === 'screenshot' && (
-        <div className="space-y-4">
-          <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-brand-400 transition-colors">
-            <input ref={fileInputRef} type="file" accept="image/*" onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)} className="hidden" id="screenshot-upload" />
-            <label htmlFor="screenshot-upload" className="cursor-pointer block">
-              <div className="text-4xl mb-3" aria-hidden="true">📸</div>
-              {selectedFile ? <p className="text-brand-600 font-medium break-all">{selectedFile.name}</p> : <><p className="text-gray-600 font-medium">Click to upload a screenshot</p><p className="text-sm text-gray-400 mt-1">PNG, JPEG or other image formats</p></>}
-            </label>
-          </div>
-          <button type="button" onClick={handleScreenshotExtract} disabled={extracting || !selectedFile} className="w-full bg-brand-600 text-white py-2 px-4 rounded-lg hover:bg-brand-700 transition-colors disabled:opacity-50 font-medium">
-            {extracting ? 'Extracting deadlines...' : 'Extract Deadlines'}
-          </button>
+        <div className="flex border-b border-border-subtle overflow-x-auto bg-surface-hover/50 scrollbar-hide">
+          {[
+            { key: 'manual', label: 'Manual Entry', icon: Edit3 },
+            { key: 'screenshot', label: 'Screenshot', icon: ImageIcon },
+            { key: 'paste', label: 'Paste Text', icon: FileText },
+          ].map(({ key, label, icon: Icon }) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setTab(key as InputTab)}
+              aria-selected={tab === key}
+              role="tab"
+              className={cn(
+                "flex-1 flex items-center justify-center gap-2 px-6 py-4 text-sm font-medium border-b-2 whitespace-nowrap transition-all duration-200",
+                tab === key
+                  ? "border-brand text-brand bg-surface"
+                  : "border-transparent text-text-secondary hover:text-text-primary hover:bg-surface-hover"
+              )}
+            >
+              <Icon className={cn("w-4 h-4", tab === key ? "text-brand" : "text-text-muted")} />
+              {label}
+            </button>
+          ))}
         </div>
-      )}
 
-      {tab === 'paste' && (
-        <div className="space-y-4">
-          <label htmlFor="deadline-text" className="sr-only">Deadline text</label>
-          <textarea id="deadline-text" value={pastedText} onChange={(e) => setPastedText(e.target.value)} rows={8} maxLength={20000} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none resize-none font-mono text-sm" placeholder={'Paste the deadline text here...\n\ne.g., "The final project submission is due on December 15th at 11:59 PM"'} />
-          <button type="button" onClick={handleTextExtract} disabled={extracting || !pastedText.trim()} className="w-full bg-brand-600 text-white py-2 px-4 rounded-lg hover:bg-brand-700 transition-colors disabled:opacity-50 font-medium">
-            {extracting ? 'Extracting deadlines...' : 'Extract Deadlines'}
-          </button>
+        <div className="p-6 sm:p-8">
+          {tab === 'manual' && (
+            <form onSubmit={handleManualSubmit} className="space-y-5">
+              <div>
+                <label htmlFor="event-title" className={labelClasses}>Title *</label>
+                <input id="event-title" type="text" value={title} onChange={(e) => setTitle(e.target.value)} required maxLength={200} className={inputClasses} placeholder="e.g., CS101 Final Exam" />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                <div>
+                  <label htmlFor="event-type" className={labelClasses}>Type *</label>
+                  <select id="event-type" value={type} onChange={(e) => setType(e.target.value)} className={inputClasses}>
+                    <option value="exam">📝 Exam</option>
+                    <option value="submission">📋 Submission</option>
+                    <option value="hackathon">💻 Hackathon</option>
+                    <option value="other">📌 Other</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label htmlFor="event-due-at" className={labelClasses}>Due At *</label>
+                  <input id="event-due-at" type="datetime-local" value={dueAt} onChange={(e) => setDueAt(e.target.value)} required className={inputClasses} />
+                </div>
+              </div>
+
+              <div>
+                <label className={labelClasses}>Reminders</label>
+                <div className="bg-surface-elevated border border-border-strong rounded-xl p-4 shadow-sm">
+                  <ReminderConfig value={reminders} onChange={setReminders} />
+                </div>
+              </div>
+
+              <div>
+                <label htmlFor="event-notes" className={labelClasses}>Notes</label>
+                <textarea id="event-notes" value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} maxLength={2000} className={cn(inputClasses, "resize-none")} placeholder="Any additional notes or links..." />
+              </div>
+
+              <div className="flex flex-col-reverse sm:flex-row justify-end gap-3 pt-4 border-t border-border-subtle">
+                <button type="button" onClick={() => router.push('/dashboard')} className="px-5 py-2.5 border border-border-strong text-text-primary rounded-xl hover:bg-surface-hover transition-colors font-medium">Cancel</button>
+                <button type="submit" className="px-6 py-2.5 bg-brand text-white rounded-xl hover:bg-brand-hover shadow-sm hover:shadow transition-all font-medium">Save Deadline</button>
+              </div>
+            </form>
+          )}
+
+          {tab === 'screenshot' && (
+            <div className="space-y-6">
+              <div className="border-2 border-dashed border-border-strong bg-surface-hover/50 rounded-2xl p-10 text-center hover:border-brand/50 hover:bg-brand/5 transition-colors group">
+                <input ref={fileInputRef} type="file" accept="image/*" onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)} className="hidden" id="screenshot-upload" />
+                <label htmlFor="screenshot-upload" className="cursor-pointer block">
+                  <div className="w-16 h-16 bg-surface border border-border-subtle rounded-full flex items-center justify-center mx-auto mb-4 group-hover:scale-105 transition-transform shadow-sm">
+                    <ImageIcon className="w-8 h-8 text-text-muted group-hover:text-brand transition-colors" />
+                  </div>
+                  {selectedFile ? (
+                    <p className="text-brand font-medium break-all px-4">{selectedFile.name}</p>
+                  ) : (
+                    <>
+                      <p className="text-text-primary font-medium text-lg mb-1">Click to upload screenshot</p>
+                      <p className="text-sm text-text-secondary">PNG, JPEG or other image formats</p>
+                    </>
+                  )}
+                </label>
+              </div>
+              <div className="flex justify-end pt-4 border-t border-border-subtle">
+                <button type="button" onClick={handleScreenshotExtract} disabled={extracting || !selectedFile} className="px-6 py-2.5 bg-brand text-white rounded-xl hover:bg-brand-hover shadow-sm transition-all disabled:opacity-50 disabled:hover:scale-100 font-medium">
+                  {extracting ? 'Extracting...' : 'Extract Deadlines'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {tab === 'paste' && (
+            <div className="space-y-6">
+              <div>
+                <label htmlFor="deadline-text" className="sr-only">Deadline text</label>
+                <textarea id="deadline-text" value={pastedText} onChange={(e) => setPastedText(e.target.value)} rows={8} maxLength={20000} className={cn(inputClasses, "resize-none font-mono text-sm leading-relaxed")} placeholder={'Paste syllabus text or email here...\n\ne.g., "The final project submission is due on December 15th at 11:59 PM PST"'} />
+              </div>
+              <div className="flex justify-end pt-4 border-t border-border-subtle">
+                <button type="button" onClick={handleTextExtract} disabled={extracting || !pastedText.trim()} className="px-6 py-2.5 bg-brand text-white rounded-xl hover:bg-brand-hover shadow-sm transition-all disabled:opacity-50 disabled:hover:scale-100 font-medium">
+                  {extracting ? 'Extracting...' : 'Extract Deadlines'}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 }
