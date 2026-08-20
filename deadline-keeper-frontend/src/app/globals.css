@@ -4,43 +4,45 @@
 
 @layer base {
   :root {
-    --background: 246 247 250;
-    --foreground: 15 23 42;
+    --background: 247 247 245;
+    --foreground: 20 18 27;
     --surface: 255 255 255;
-    --surface-hover: 248 250 252;
+    --surface-hover: 246 244 250;
     --surface-elevated: 255 255 255;
     --surface-glass: 255 255 255;
-    --text-primary: 15 23 42;
-    --text-secondary: 71 85 105;
-    --text-muted: 100 116 139;
-    --border-subtle: 226 232 240;
-    --border-strong: 203 213 225;
+    --text-primary: 20 18 27;
+    --text-secondary: 82 78 93;
+    --text-muted: 125 120 136;
+    --border-subtle: 229 226 234;
+    --border-strong: 204 199 213;
     --border-glass: 255 255 255;
-    --primary: 109 70 193;
-    --primary-hover: 88 55 158;
-    --success: 22 101 52;
-    --warning: 161 98 7;
-    --danger: 185 28 28;
+    --primary: 109 40 217;
+    --primary-hover: 91 33 182;
+    --primary-soft: 245 239 255;
+    --success: 4 120 87;
+    --warning: 180 83 9;
+    --danger: 190 24 93;
   }
 
   .dark {
-    --background: 15 23 42;
-    --foreground: 248 250 252;
-    --surface: 30 41 59;
-    --surface-hover: 51 65 85;
-    --surface-elevated: 51 65 85;
-    --surface-glass: 30 41 59;
-    --text-primary: 248 250 252;
-    --text-secondary: 203 213 225;
-    --text-muted: 148 163 184;
-    --border-subtle: 51 65 85;
-    --border-strong: 71 85 105;
+    --background: 20 18 27;
+    --foreground: 248 247 245;
+    --surface: 30 27 38;
+    --surface-hover: 42 37 52;
+    --surface-elevated: 39 34 49;
+    --surface-glass: 30 27 38;
+    --text-primary: 248 247 245;
+    --text-secondary: 204 199 213;
+    --text-muted: 151 146 161;
+    --border-subtle: 61 55 70;
+    --border-strong: 82 75 93;
     --border-glass: 255 255 255;
     --primary: 167 139 250;
     --primary-hover: 196 181 253;
-    --success: 74 222 128;
+    --primary-soft: 46 35 66;
+    --success: 52 211 153;
     --warning: 251 191 36;
-    --danger: 248 113 113;
+    --danger: 244 114 182;
   }
 
   * { border-color: rgb(var(--border-subtle)); }
@@ -51,12 +53,12 @@
     @apply text-foreground antialiased;
     background-color: rgb(var(--background));
     background-image:
-      radial-gradient(circle at 12% -8%, rgba(var(--primary), 0.09), transparent 27%),
-      radial-gradient(circle at 94% 10%, rgba(14, 116, 144, 0.045), transparent 22%);
+      radial-gradient(circle at 8% 0%, rgba(var(--primary), 0.075), transparent 24%),
+      radial-gradient(circle at 100% 15%, rgba(14, 116, 144, 0.035), transparent 20%);
     font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   }
 
-  ::selection { background: rgba(var(--primary), 0.2); }
+  ::selection { background: rgba(var(--primary), 0.18); }
 
   @media (prefers-reduced-motion: reduce) {
     *, ::before, ::after {
@@ -70,23 +72,23 @@
 
 @layer utilities {
   .bg-glass {
-    background-color: rgba(var(--surface-glass), 0.78);
+    background-color: rgba(var(--surface-glass), 0.8);
     @apply backdrop-blur-md;
-    border: 1px solid rgba(var(--border-glass), 0.45);
+    border: 1px solid rgba(var(--border-glass), 0.55);
   }
 
   .bg-glass-strong {
-    background-color: rgba(var(--surface-glass), 0.92);
+    background-color: rgba(var(--surface-glass), 0.94);
     @apply backdrop-blur-xl;
-    border: 1px solid rgba(var(--border-glass), 0.58);
+    border: 1px solid rgba(var(--border-glass), 0.68);
   }
 
   .shadow-soft {
-    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 10px 30px rgba(15, 23, 42, 0.055);
+    box-shadow: 0 1px 2px rgba(20, 18, 27, 0.035), 0 12px 32px rgba(20, 18, 27, 0.06);
   }
 
   .shadow-float {
-    box-shadow: 0 18px 42px rgba(15, 23, 42, 0.16), 0 4px 10px rgba(15, 23, 42, 0.08);
+    box-shadow: 0 18px 44px rgba(20, 18, 27, 0.15), 0 4px 12px rgba(20, 18, 27, 0.07);
   }
 
   .text-balance { text-wrap: balance; }
