@@ -4,57 +4,54 @@
 
 @layer base {
   :root {
-    --background: 247 247 245;
-    --foreground: 20 18 27;
-    --surface: 255 255 255;
-    --surface-hover: 246 244 250;
-    --surface-elevated: 255 255 255;
-    --surface-glass: 255 255 255;
-    --text-primary: 20 18 27;
-    --text-secondary: 82 78 93;
+    --background: 244 243 240;
+    --foreground: 24 22 29;
+    --surface: 246 245 242;
+    --surface-hover: 241 239 235;
+    --surface-elevated: 249 248 245;
+    --surface-glass: 246 245 242;
+    --text-primary: 24 22 29;
+    --text-secondary: 86 82 94;
     --text-muted: 125 120 136;
-    --border-subtle: 229 226 234;
-    --border-strong: 204 199 213;
+    --border-subtle: 231 228 224;
+    --border-strong: 210 205 199;
     --border-glass: 255 255 255;
     --primary: 109 40 217;
     --primary-hover: 91 33 182;
-    --primary-soft: 245 239 255;
+    --primary-soft: 241 234 255;
     --success: 4 120 87;
     --warning: 180 83 9;
     --danger: 190 24 93;
   }
 
   .dark {
-    --background: 20 18 27;
-    --foreground: 248 247 245;
-    --surface: 30 27 38;
-    --surface-hover: 42 37 52;
-    --surface-elevated: 39 34 49;
-    --surface-glass: 30 27 38;
-    --text-primary: 248 247 245;
-    --text-secondary: 204 199 213;
-    --text-muted: 151 146 161;
-    --border-subtle: 61 55 70;
-    --border-strong: 82 75 93;
+    --background: 24 22 29;
+    --foreground: 246 245 242;
+    --surface: 31 29 38;
+    --surface-hover: 39 36 48;
+    --surface-elevated: 36 33 44;
+    --surface-glass: 31 29 38;
+    --text-primary: 246 245 242;
+    --text-secondary: 205 200 212;
+    --text-muted: 153 148 163;
+    --border-subtle: 57 53 66;
+    --border-strong: 79 73 91;
     --border-glass: 255 255 255;
     --primary: 167 139 250;
     --primary-hover: 196 181 253;
-    --primary-soft: 46 35 66;
+    --primary-soft: 52 40 73;
     --success: 52 211 153;
     --warning: 251 191 36;
     --danger: 244 114 182;
   }
 
   * { border-color: rgb(var(--border-subtle)); }
-
   html { scroll-behavior: smooth; }
 
   body {
     @apply text-foreground antialiased;
     background-color: rgb(var(--background));
-    background-image:
-      radial-gradient(circle at 8% 0%, rgba(var(--primary), 0.075), transparent 24%),
-      radial-gradient(circle at 100% 15%, rgba(14, 116, 144, 0.035), transparent 20%);
+    background-image: radial-gradient(circle at 8% 0%, rgba(var(--primary), 0.055), transparent 25%);
     font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   }
 
@@ -72,15 +69,32 @@
 
 @layer utilities {
   .bg-glass {
-    background-color: rgba(var(--surface-glass), 0.8);
+    background-color: rgba(var(--surface-glass), 0.78);
     @apply backdrop-blur-md;
-    border: 1px solid rgba(var(--border-glass), 0.55);
+    border: 1px solid rgba(var(--border-glass), 0.62);
   }
 
   .bg-glass-strong {
     background-color: rgba(var(--surface-glass), 0.94);
     @apply backdrop-blur-xl;
-    border: 1px solid rgba(var(--border-glass), 0.68);
+    border: 1px solid rgba(var(--border-glass), 0.72);
+  }
+
+  /* Primary tactile surface: light from top-left, depth to bottom-right. */
+  .shadow-neu {
+    box-shadow: -7px -7px 16px rgba(255, 255, 255, 0.82), 7px 7px 16px rgba(36, 32, 42, 0.10);
+  }
+
+  .shadow-neu-hover {
+    box-shadow: -9px -9px 19px rgba(255, 255, 255, 0.88), 10px 10px 22px rgba(36, 32, 42, 0.13);
+  }
+
+  .shadow-neu-inset {
+    box-shadow: inset 4px 4px 9px rgba(36, 32, 42, 0.08), inset -4px -4px 9px rgba(255, 255, 255, 0.80);
+  }
+
+  .shadow-neu-inset-strong {
+    box-shadow: inset 6px 6px 11px rgba(36, 32, 42, 0.11), inset -5px -5px 10px rgba(255, 255, 255, 0.82);
   }
 
   .shadow-soft {
@@ -93,4 +107,17 @@
 
   .text-balance { text-wrap: balance; }
   .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+}
+
+.dark .shadow-neu {
+  box-shadow: -7px -7px 16px rgba(255, 255, 255, 0.025), 7px 7px 16px rgba(0, 0, 0, 0.34);
+}
+.dark .shadow-neu-hover {
+  box-shadow: -9px -9px 19px rgba(255, 255, 255, 0.035), 10px 10px 22px rgba(0, 0, 0, 0.40);
+}
+.dark .shadow-neu-inset {
+  box-shadow: inset 4px 4px 9px rgba(0, 0, 0, 0.28), inset -4px -4px 9px rgba(255, 255, 255, 0.025);
+}
+.dark .shadow-neu-inset-strong {
+  box-shadow: inset 6px 6px 11px rgba(0, 0, 0, 0.34), inset -5px -5px 10px rgba(255, 255, 255, 0.03);
 }
