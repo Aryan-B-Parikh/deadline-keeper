@@ -29,28 +29,30 @@
   }
 
   .dark {
-    --background: 25 24 30;
-    --foreground: 245 243 247;
-    --surface: 32 30 39;
-    --surface-hover: 40 37 48;
-    --surface-elevated: 38 35 46;
-    --surface-glass: 32 30 39;
-    --text-primary: 245 243 247;
-    --text-secondary: 207 202 214;
-    --text-muted: 153 148 163;
-    --border-subtle: 57 53 66;
-    --border-strong: 78 73 91;
+    /* Canonical dark palette: near-black foundation, cool charcoal surfaces, one purple brand accent. */
+    --background: 13 13 17;
+    --foreground: 242 243 246;
+    --surface: 31 31 42;
+    --surface-hover: 26 26 36;
+    --surface-elevated: 35 35 52;
+    --surface-glass: 20 20 28;
+    --text-primary: 242 243 246;
+    --text-secondary: 161 161 170;
+    --text-muted: 126 127 138;
+    --border-subtle: 46 46 58;
+    --border-strong: 62 62 78;
     --border-glass: 255 255 255;
-    --primary: 167 139 250;
-    --primary-hover: 196 181 253;
-    --primary-soft: 55 43 76;
+    --primary: 124 92 252;
+    --primary-hover: 145 113 255;
+    --primary-soft: 42 32 68;
     --success: 52 211 153;
     --warning: 251 191 36;
-    --danger: 244 114 182;
-    --neu-light: 64 61 73;
-    --neu-dark: 10 9 14;
-    --neu-dark-strong: 5 5 8;
-    --glass-alpha: 0.78;
+    --danger: 248 113 113;
+    /* Neumorphism remains visible without creating the washed-out grey surfaces seen previously. */
+    --neu-light: 55 55 70;
+    --neu-dark: 4 4 7;
+    --neu-dark-strong: 2 2 4;
+    --glass-alpha: 0.82;
   }
 
   * { border-color: rgb(var(--border-subtle)); }
