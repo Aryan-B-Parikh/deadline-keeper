@@ -4,7 +4,8 @@ import { useState, useEffect } from 'react';
 import { userApi, calendarApi, type UserProfile } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { cn } from '@/lib/utils';
-import { User, Inbox as InboxIcon, Bell, Calendar as CalendarIcon, Zap, CheckCircle2, Copy } from 'lucide-react';
+import { User, Inbox as InboxIcon, Bell, Calendar as CalendarIcon, Zap, CheckCircle2, Copy, Monitor, Sun, Moon } from 'lucide-react';
+import { useTheme } from 'next-themes';
 
 function errorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback;
@@ -21,6 +22,8 @@ export default function SettingsPage() {
   const [emailNotifications, setEmailNotifications] = useState(true);
   const [message, setMessage] = useState('');
   const [copied, setCopied] = useState(false);
+  
+  const { theme, setTheme } = useTheme();
 
   useEffect(() => {
     if (!user) return;
@@ -134,6 +137,37 @@ export default function SettingsPage() {
               <label className={labelClasses} htmlFor="timezone">Timezone</label>
               <input id="timezone" type="text" value={timezone} onChange={(e) => setTimezone(e.target.value)} className={inputClasses} placeholder="e.g., Asia/Kolkata" />
             </div>
+          </div>
+        </section>
+
+        <section className={sectionClasses} aria-labelledby="appearance-heading">
+          <div className="flex items-center gap-2 mb-5">
+            <Monitor className="w-5 h-5 text-text-muted" />
+            <h2 id="appearance-heading" className="text-lg font-semibold text-text-primary">Appearance</h2>
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { id: 'light', label: 'Light', icon: Sun },
+              { id: 'dark', label: 'Dark', icon: Moon },
+              { id: 'system', label: 'System', icon: Monitor },
+            ].map((t) => {
+              const active = theme === t.id;
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => setTheme(t.id)}
+                  className={cn(
+                    "flex flex-col items-center justify-center gap-2 p-4 rounded-xl border transition-all duration-200",
+                    active 
+                      ? "border-brand bg-brand/5 text-brand shadow-sm" 
+                      : "border-border-subtle bg-surface hover:bg-surface-hover text-text-secondary hover:text-text-primary hover:border-border-strong"
+                  )}
+                >
+                  <t.icon className="w-5 h-5" />
+                  <span className="text-sm font-medium">{t.label}</span>
+                </button>
+              );
+            })}
           </div>
         </section>
 
