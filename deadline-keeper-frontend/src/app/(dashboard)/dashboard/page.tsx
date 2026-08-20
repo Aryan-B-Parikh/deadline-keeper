@@ -34,9 +34,9 @@ export default function DashboardPage() {
     catch (err: unknown) { setMutationError(err instanceof Error ? err.message : fallback); }
   };
 
-  const handleMarkDone = (id: string) => runMutation(() => eventApi.markDone(id), 'Failed to mark deadline as done');
-  const handleSnooze = (id: string) => runMutation(() => eventApi.snooze(id, '1d'), 'Failed to snooze deadline');
-  const handleDelete = async (id: string) => { if (confirm('Delete this event?')) await runMutation(() => eventApi.delete(id), 'Failed to delete deadline'); };
+  const handleMarkDone = (id: string) => runMutation(async () => { await eventApi.markDone(id); }, 'Failed to mark deadline as done');
+  const handleSnooze = (id: string) => runMutation(async () => { await eventApi.snooze(id, '1d'); }, 'Failed to snooze deadline');
+  const handleDelete = async (id: string) => { if (confirm('Delete this event?')) await runMutation(async () => { await eventApi.delete(id); }, 'Failed to delete deadline'); };
 
   if (authLoading) return <div className="space-y-6 animate-pulse"><div className="h-56 bg-surface rounded-[28px] border border-border-subtle" /><div className="h-10 w-72 bg-surface-hover rounded-full" /><div className="h-28 bg-surface rounded-2xl border border-border-subtle" /></div>;
 
