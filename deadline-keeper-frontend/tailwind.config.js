@@ -37,6 +37,14 @@ module.exports = {
           800: '#4c1d95',
           900: '#3b0764',
         },
+        clay: {
+          peach: 'rgb(var(--peach) / <alpha-value>)',
+          blue: 'rgb(var(--blue) / <alpha-value>)',
+          lime: 'rgb(var(--lime) / <alpha-value>)',
+          lavender: 'rgb(var(--lavender) / <alpha-value>)',
+          pink: 'rgb(var(--pink) / <alpha-value>)',
+          mint: 'rgb(var(--mint) / <alpha-value>)',
+        },
         status: {
           success: 'rgb(var(--success) / <alpha-value>)',
           warning: 'rgb(var(--warning) / <alpha-value>)',
